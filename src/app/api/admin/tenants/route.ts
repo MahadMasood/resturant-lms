@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
-// GET /api/admin/tenants — list all tenants
+// GET /api/admin/tenants — list all tenants with their managers and staff
 export async function GET() {
   const session = await auth();
   if (!session?.user || session.user.role !== "SUPER_ADMIN") {
@@ -11,17 +11,30 @@ export async function GET() {
   }
 
   const tenants = await prisma.tenant.findMany({
-    include: { _count: { select: { users: true, modules: true } } },
+    include: {
+      _count: { select: { users: true, modules: true } },
+      users: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          createdAt: true,
+        },
+        orderBy: { role: "asc" },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(
-    tenants.map((t: { id: string; name: string; createdAt: Date; _count: { users: number; modules: number } }) => ({
+    tenants.map((t: any) => ({
       id: t.id,
       name: t.name,
       createdAt: t.createdAt,
       userCount: t._count.users,
       moduleCount: t._count.modules,
+      users: t.users,
     }))
   );
 }
@@ -62,4 +75,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ tenantId: tenant.id, tenantName: tenant.name }, { status: 201 });
 }
-
