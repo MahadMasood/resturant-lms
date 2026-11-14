@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import StaffModuleCard from "@/components/ui/StaffModuleCard";
-import Navbar, { NavTabItem } from "@/components/ui/Navbar";
+import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 import Link from "next/link";
 
 interface StaffModuleItem {
@@ -97,7 +97,7 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
     }
   }, [modules, moduleFilter]);
 
-  // Tabs for Staff Portal
+  // Tabs for Staff Portal (on the side)
   const tabs: NavTabItem[] = [
     {
       id: "overview",
@@ -135,18 +135,15 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Centralized Dynamic Navbar with Hamburger Menu */}
-      <Navbar
-        title={tenantName}
-        subtitle={`${staffName}'s Training Portal`}
-        portalType="staff"
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
-
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 py-8 space-y-8">
+    <PortalLayout
+      portalTitle={tenantName}
+      portalSubtitle={`${staffName}'s Training Portal`}
+      portalType="staff"
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+    >
+      <div className="space-y-8">
         {/* ======================================================== */}
         {/* TAB 1: OVERVIEW & ACCREDITATION PROGRESS                 */}
         {/* ======================================================== */}
@@ -458,7 +455,7 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
             )}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PortalLayout>
   );
 }

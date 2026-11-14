@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import StatsCard from "@/components/ui/StatsCard";
-import Navbar, { NavTabItem } from "@/components/ui/Navbar";
+import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 import Link from "next/link";
 
 interface TenantUser {
@@ -173,7 +173,6 @@ export default function SuperAdminView() {
 
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // Exclude super admins from manager/staff directory
       if (u.role === "SUPER_ADMIN") return false;
 
       const matchesSearch =
@@ -189,7 +188,7 @@ export default function SuperAdminView() {
     });
   }, [users, userSearch, userRoleFilter, userTenantFilter]);
 
-  // Navigation Tabs Definition
+  // Navigation Tabs (on the side)
   const tabs: NavTabItem[] = [
     {
       id: "overview",
@@ -236,18 +235,15 @@ export default function SuperAdminView() {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Dynamic Navbar with Hamburger Menu & Feature Tabs */}
-      <Navbar
-        title="LMS Platform"
-        subtitle="Super Admin Command Center"
-        portalType="super-admin"
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
-
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
+    <PortalLayout
+      portalTitle="LMS Platform"
+      portalSubtitle="Super Admin Console"
+      portalType="super-admin"
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+    >
+      <div className="space-y-8">
         {/* Alerts */}
         {error && (
           <div className="rounded-2xl border border-red-500/40 bg-red-950/40 p-4 text-xs text-red-300 flex items-center justify-between">
@@ -350,7 +346,7 @@ export default function SuperAdminView() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-white">Manage All Managers & Staff</h3>
+                <h3 className="text-base font-bold text-white">Manage All Managers &amp; Staff</h3>
                 <p className="text-xs text-neutral-400 mt-1">
                   View and audit all managers, team rosters, and certifications platform-wide.
                 </p>
@@ -382,7 +378,7 @@ export default function SuperAdminView() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Hospitality Venues & Organizations
+                  Hospitality Venues &amp; Organizations
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
                   Manage database-isolated tenant organizations and provision restaurant management accounts.
@@ -558,7 +554,7 @@ export default function SuperAdminView() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Platform Managers & Staff Directory
+                  Platform Managers &amp; Staff Directory
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
                   Full visibility into all managers and staff accounts assigned across every restaurant organization.
@@ -579,7 +575,6 @@ export default function SuperAdminView() {
             {/* Filter Bar */}
             <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-4 md:p-6 space-y-4 shadow-xl">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Search */}
                 <div>
                   <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
                     Search Staff or Manager
@@ -593,7 +588,6 @@ export default function SuperAdminView() {
                   />
                 </div>
 
-                {/* Role Filter */}
                 <div>
                   <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
                     Role Category
@@ -609,7 +603,6 @@ export default function SuperAdminView() {
                   </select>
                 </div>
 
-                {/* Venue Filter */}
                 <div>
                   <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
                     Venue Organization
@@ -766,7 +759,7 @@ export default function SuperAdminView() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PortalLayout>
   );
 }

@@ -5,7 +5,7 @@ import ModuleEditorModal, { ModuleDraft } from "@/components/ui/ModuleEditorModa
 import InviteStaffModal from "@/components/ui/InviteStaffModal";
 import StaffProgressTable from "@/components/ui/StaffProgressTable";
 import StatsCard from "@/components/ui/StatsCard";
-import Navbar, { NavTabItem } from "@/components/ui/Navbar";
+import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 
 interface ModuleItem {
   id: string;
@@ -87,11 +87,11 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
     window.location.href = "/api/manager/export/compliance";
   };
 
-  // Tabs for Manager Portal
+  // Tabs for Manager Portal (on the side)
   const tabs: NavTabItem[] = [
     {
       id: "overview",
-      label: "Overview",
+      label: "Overview & KPIs",
       description: "Executive KPI metrics and team health",
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,7 +112,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
     },
     {
       id: "curriculums",
-      label: "Curriculums",
+      label: "Curriculums Library",
       description: "Course creation, video uploads, and quiz builder",
       badge: modules.length,
       icon: (
@@ -133,7 +133,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
     },
     {
       id: "export",
-      label: "Audit Export",
+      label: "Health Inspector Export",
       description: "Inspector-ready CSV compliance reports",
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,18 +144,15 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Centralized Dynamic Navbar with Hamburger Menu */}
-      <Navbar
-        title={tenantName}
-        subtitle="Manager Control Portal"
-        portalType="manager"
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-      />
-
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8 space-y-8">
+    <PortalLayout
+      portalTitle={tenantName}
+      portalSubtitle="General Manager Portal"
+      portalType="manager"
+      tabs={tabs}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+    >
+      <div className="space-y-8">
         {/* ======================================================== */}
         {/* TAB 1: OVERVIEW & KEY METRICS                            */}
         {/* ======================================================== */}
@@ -301,7 +298,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Staff Training & Compliance Roster
+                  Staff Training &amp; Compliance Roster
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
                   Real-time High-Water Mark verification, watch seconds, and official accreditation certificates.
@@ -578,7 +575,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {/* Modals */}
       <ModuleEditorModal
@@ -593,6 +590,6 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
         onClose={() => setIsStaffModalOpen(false)}
         onStaffAdded={loadData}
       />
-    </div>
+    </PortalLayout>
   );
 }
