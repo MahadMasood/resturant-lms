@@ -20,8 +20,14 @@ export async function GET() {
           email: true,
           role: true,
           createdAt: true,
+          _count: {
+            select: {
+              certificates: true,
+              quizAttempts: true,
+            },
+          },
         },
-        orderBy: { role: "asc" },
+        orderBy: [{ role: "asc" }, { name: "asc" }],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -34,7 +40,15 @@ export async function GET() {
       createdAt: t.createdAt,
       userCount: t._count.users,
       moduleCount: t._count.modules,
-      users: t.users,
+      users: t.users.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+        certificatesCount: u._count?.certificates ?? 0,
+        quizAttemptsCount: u._count?.quizAttempts ?? 0,
+      })),
     }))
   );
 }

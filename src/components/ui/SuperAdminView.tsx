@@ -11,6 +11,8 @@ interface TenantUser {
   email: string;
   role: "MANAGER" | "STAFF" | "SUPER_ADMIN";
   createdAt: string;
+  certificatesCount?: number;
+  quizAttemptsCount?: number;
 }
 
 interface TenantData {
@@ -36,11 +38,14 @@ interface PlatformUser {
 }
 
 export default function SuperAdminView() {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("venues");
 
   // Tenants data
   const [tenants, setTenants] = useState<TenantData[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(true);
+
+  // Expanded tenant for viewing all employees directly under a restaurant
+  const [expandedTenantId, setExpandedTenantId] = useState<string | null>(null);
 
   // Platform users data (all managers and staff under Super Admin)
   const [users, setUsers] = useState<PlatformUser[]>([]);
@@ -74,12 +79,16 @@ export default function SuperAdminView() {
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setTenants(Array.isArray(data) ? data : []);
+      // If none expanded yet, auto-expand the first tenant so employees are immediately visible
+      if (Array.isArray(data) && data.length > 0 && !expandedTenantId) {
+        setExpandedTenantId(data[0].id);
+      }
     } catch (err) {
       setError(String(err));
     } finally {
       setLoadingTenants(false);
     }
-  }, []);
+  }, [expandedTenantId]);
 
   // Load Platform Users (Managers and Staff across all venues)
   const loadUsers = useCallback(async () => {
@@ -159,6 +168,12 @@ export default function SuperAdminView() {
     }
   };
 
+  // Switch to users tab filtered by a specific restaurant
+  const handleInspectRestaurantEmployees = (tenantId: string) => {
+    setUserTenantFilter(tenantId);
+    setActiveTab("users");
+  };
+
   // Metrics
   const totalManagers = useMemo(() => users.filter((u) => u.role === "MANAGER").length, [users]);
   const totalStaff = useMemo(() => users.filter((u) => u.role === "STAFF").length, [users]);
@@ -191,19 +206,9 @@ export default function SuperAdminView() {
   // Navigation Tabs (on the side)
   const tabs: NavTabItem[] = [
     {
-      id: "overview",
-      label: "Platform Overview",
-      description: "Platform KPIs and global system status",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-        </svg>
-      ),
-    },
-    {
       id: "venues",
-      label: "Venues & Organizations",
-      description: "Provision and manage restaurant organizations",
+      label: "Venues & Employees",
+      description: "Click any restaurant to view its complete employee roster",
       badge: tenants.length,
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -213,12 +218,22 @@ export default function SuperAdminView() {
     },
     {
       id: "users",
-      label: "Managers & Staff Directory",
-      description: "View all managers and staff across all venues",
+      label: "All Managers & Staff",
+      description: "Global directory of all employees across all venues",
       badge: totalManagers + totalStaff,
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+    },
+    {
+      id: "overview",
+      label: "Platform Overview",
+      description: "Platform KPIs and global system status",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
         </svg>
       ),
     },
@@ -259,129 +274,17 @@ export default function SuperAdminView() {
         )}
 
         {/* ======================================================== */}
-        {/* TAB 1: PLATFORM OVERVIEW                                  */}
-        {/* ======================================================== */}
-        {activeTab === "overview" && (
-          <div className="space-y-8 animate-in fade-in duration-200">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-neutral-900 border border-neutral-800 px-3 py-1 text-xs text-neutral-400 mb-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
-                Global Platform Architecture
-              </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-                Enterprise Command Center
-              </h1>
-              <p className="mt-1 text-sm text-neutral-400">
-                Centralized oversight for multi-tenant isolation, general managers, staff compliance, and certification integrity.
-              </p>
-            </div>
-
-            {/* KPI Cards Grid */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <StatsCard
-                label="Provisioned Venues"
-                value={tenants.length}
-                icon={
-                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-                  </svg>
-                }
-                accent="text-blue-400"
-              />
-              <StatsCard
-                label="General Managers"
-                value={totalManagers}
-                icon={
-                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
-                  </svg>
-                }
-                accent="text-purple-400"
-              />
-              <StatsCard
-                label="Certified Staff"
-                value={totalStaff}
-                icon={
-                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                  </svg>
-                }
-                accent="text-emerald-400"
-              />
-              <StatsCard
-                label="Active Curriculums"
-                value={totalModules}
-                icon={
-                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
-                    <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
-                  </svg>
-                }
-                accent="text-amber-400"
-              />
-            </div>
-
-            {/* Quick Action Feature Banners */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button
-                onClick={() => setActiveTab("venues")}
-                className="rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 text-left hover:border-blue-500/50 hover:bg-neutral-900 transition group shadow-lg"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-950 border border-blue-500/30 text-blue-400 mb-4 group-hover:scale-105 transition">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-                <h3 className="text-base font-bold text-white">Provision New Venue</h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Create isolated restaurant tenant organizations and assign venue general managers.
-                </p>
-              </button>
-
-              <button
-                onClick={() => setActiveTab("users")}
-                className="rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 text-left hover:border-purple-500/50 hover:bg-neutral-900 transition group shadow-lg"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-950 border border-purple-500/30 text-purple-400 mb-4 group-hover:scale-105 transition">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-base font-bold text-white">Manage All Managers &amp; Staff</h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  View and audit all managers, team rosters, and certifications platform-wide.
-                </p>
-              </button>
-
-              <Link
-                href="/verify"
-                className="rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 text-left hover:border-emerald-500/50 hover:bg-neutral-900 transition group shadow-lg block"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-950 border border-emerald-500/30 text-emerald-400 mb-4 group-hover:scale-105 transition">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-                <h3 className="text-base font-bold text-white">Public Verification Engine</h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Access the inspector-facing credential validation tool for official audits.
-                </p>
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* ======================================================== */}
-        {/* TAB 2: VENUES & ORGANIZATIONS                            */}
+        {/* TAB 1: VENUES & RESTAURANT EMPLOYEES (CLICK TO VIEW)     */}
         {/* ======================================================== */}
         {activeTab === "venues" && (
           <div className="space-y-8 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Hospitality Venues &amp; Organizations
+                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                  Restaurant Venues &amp; Employee Rosters
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
-                  Manage database-isolated tenant organizations and provision restaurant management accounts.
+                  Click on any restaurant row to immediately expand and inspect all of its assigned managers and staff.
                 </p>
               </div>
 
@@ -394,6 +297,242 @@ export default function SuperAdminView() {
                 </svg>
                 <span>Sync Venues</span>
               </button>
+            </div>
+
+            {/* Venues Table with Interactive Click to View Employees */}
+            <div className="rounded-3xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-2xl">
+              <div className="border-b border-neutral-800 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-900/90">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-200">
+                    Registered Restaurants ({filteredTenants.length})
+                  </h2>
+                  <span className="text-[11px] text-blue-400 bg-blue-950/60 border border-blue-500/30 px-2 py-0.5 rounded-full font-medium">
+                    Click any venue to view staff
+                  </span>
+                </div>
+
+                <input
+                  type="text"
+                  value={tenantSearch}
+                  onChange={(e) => setTenantSearch(e.target.value)}
+                  placeholder="Filter restaurant by name or ID..."
+                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition w-full sm:w-64"
+                />
+              </div>
+
+              {loadingTenants ? (
+                <div className="p-12 text-center text-xs text-neutral-500 flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span>Loading restaurant database...</span>
+                </div>
+              ) : filteredTenants.length === 0 ? (
+                <div className="p-12 text-center text-xs text-neutral-500">
+                  No venues match your search query.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-neutral-800 text-left text-xs font-medium uppercase tracking-wider text-neutral-500 bg-neutral-950/60">
+                        <th className="px-6 py-3.5">Restaurant Venue</th>
+                        <th className="px-6 py-3.5">Tenant ID</th>
+                        <th className="px-6 py-3.5">General Manager</th>
+                        <th className="px-6 py-3.5">Total Employees</th>
+                        <th className="px-6 py-3.5">Curriculums</th>
+                        <th className="px-6 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTenants.map((t) => {
+                        const mgr = t.users?.find((u) => u.role === "MANAGER");
+                        const isExpanded = expandedTenantId === t.id;
+                        const tenantStaffList = t.users || [];
+
+                        return (
+                          <div key={t.id} className="contents">
+                            {/* Main Restaurant Row (Clickable) */}
+                            <tr
+                              onClick={() => setExpandedTenantId(isExpanded ? null : t.id)}
+                              className={`border-b border-neutral-800/60 cursor-pointer transition select-none ${
+                                isExpanded
+                                  ? "bg-blue-950/20 border-b-0"
+                                  : "hover:bg-neutral-800/40"
+                              }`}
+                            >
+                              <td className="px-6 py-4 font-bold text-white flex items-center gap-3">
+                                <span
+                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition ${
+                                    isExpanded
+                                      ? "bg-blue-600 border-blue-400 text-white shadow-sm"
+                                      : "bg-neutral-800 border-neutral-700 text-neutral-400"
+                                  }`}
+                                >
+                                  <svg
+                                    className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                      isExpanded ? "rotate-90" : ""
+                                    }`}
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </span>
+                                <div>
+                                  <span className="text-sm">{t.name}</span>
+                                  <span className="block text-[11px] text-neutral-400 font-normal">
+                                    {isExpanded ? "Click to collapse" : "Click to view employees"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="px-6 py-4 font-mono text-xs text-neutral-400">
+                                {t.id}
+                              </td>
+
+                              <td className="px-6 py-4 text-xs">
+                                {mgr ? (
+                                  <div>
+                                    <span className="text-blue-400 font-semibold">{mgr.name}</span>
+                                    <span className="block text-neutral-400 font-mono text-[10px]">{mgr.email}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-neutral-500 italic">No Manager Provisioned</span>
+                                )}
+                              </td>
+
+                              <td className="px-6 py-4">
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-800 border border-neutral-700 px-2.5 py-1 text-xs font-semibold text-neutral-200">
+                                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                  </svg>
+                                  <span>{t.userCount} Employees</span>
+                                </span>
+                              </td>
+
+                              <td className="px-6 py-4 text-xs font-mono text-neutral-300">
+                                {t.moduleCount} Courses
+                              </td>
+
+                              <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => handleInspectRestaurantEmployees(t.id)}
+                                    className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:text-white transition"
+                                    title="Open detailed directory"
+                                  >
+                                    Inspect Full
+                                  </button>
+
+                                  <button
+                                    onClick={() => handleDeleteTenant(t.id, t.name)}
+                                    disabled={deletingId === t.id}
+                                    className="rounded-lg bg-red-950/40 hover:bg-red-950/70 border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 transition font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                                    title="Delete venue"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    <span>{deletingId === t.id ? "..." : "Delete"}</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+
+                            {/* Expanded Nested Employee Drawer */}
+                            {isExpanded && (
+                              <tr className="bg-neutral-950 border-b border-neutral-800/80">
+                                <td colSpan={6} className="p-5 md:p-6">
+                                  <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-5 space-y-4">
+                                    <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+                                      <div className="flex items-center gap-2">
+                                        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 text-white text-xs font-bold">
+                                          {t.name.charAt(0).toUpperCase()}
+                                        </span>
+                                        <h3 className="text-sm font-bold text-white tracking-tight">
+                                          {t.name} &mdash; Team Employees Roster ({tenantStaffList.length})
+                                        </h3>
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleInspectRestaurantEmployees(t.id)}
+                                        className="text-xs text-blue-400 hover:text-blue-300 font-semibold transition inline-flex items-center gap-1"
+                                      >
+                                        <span>View in Directory Tab</span>
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                        </svg>
+                                      </button>
+                                    </div>
+
+                                    {tenantStaffList.length === 0 ? (
+                                      <div className="p-6 text-center text-xs text-neutral-500">
+                                        No employees registered for this restaurant yet.
+                                      </div>
+                                    ) : (
+                                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                        {tenantStaffList.map((emp) => (
+                                          <div
+                                            key={emp.id}
+                                            className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-2.5 transition hover:border-neutral-700"
+                                          >
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div className="flex items-center gap-2.5">
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-800 border border-neutral-700 text-xs font-bold text-neutral-300">
+                                                  {emp.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                  <p className="text-xs font-bold text-white leading-tight">
+                                                    {emp.name}
+                                                  </p>
+                                                  <p className="text-[10px] text-neutral-400 font-mono leading-tight mt-0.5">
+                                                    {emp.email}
+                                                  </p>
+                                                </div>
+                                              </div>
+
+                                              <span
+                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${
+                                                  emp.role === "MANAGER"
+                                                    ? "bg-blue-950 border-blue-500/30 text-blue-400"
+                                                    : "bg-emerald-950 border-emerald-500/30 text-emerald-400"
+                                                }`}
+                                              >
+                                                <span
+                                                  className={`h-1 w-1 rounded-full ${
+                                                    emp.role === "MANAGER" ? "bg-blue-400" : "bg-emerald-400"
+                                                  }`}
+                                                />
+                                                {emp.role === "MANAGER" ? "Manager" : "Staff"}
+                                              </span>
+                                            </div>
+
+                                            <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-2 border-t border-neutral-800/80">
+                                              <span>Joined: {new Date(emp.createdAt).toLocaleDateString()}</span>
+                                              {emp.role === "STAFF" && (
+                                                <span className="font-semibold text-emerald-400">
+                                                  {emp.certificatesCount ?? 0} Certified
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             {/* Provision Form Card */}
@@ -452,108 +591,17 @@ export default function SuperAdminView() {
                 </button>
               </form>
             </div>
-
-            {/* Venues Table */}
-            <div className="rounded-3xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-xl">
-              <div className="border-b border-neutral-800 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300">
-                    Registered Venues ({filteredTenants.length})
-                  </h2>
-                </div>
-
-                <input
-                  type="text"
-                  value={tenantSearch}
-                  onChange={(e) => setTenantSearch(e.target.value)}
-                  placeholder="Search venue name or ID..."
-                  className="rounded-xl border border-neutral-800 bg-neutral-950 px-3.5 py-1.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition w-full sm:w-64"
-                />
-              </div>
-
-              {loadingTenants ? (
-                <div className="p-12 text-center text-xs text-neutral-500 flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  <span>Loading venues from database...</span>
-                </div>
-              ) : filteredTenants.length === 0 ? (
-                <div className="p-12 text-center text-xs text-neutral-500">
-                  No venues found.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-800 text-left text-xs font-medium uppercase tracking-wider text-neutral-500 bg-neutral-950/40">
-                        <th className="px-6 py-3.5">Venue Name</th>
-                        <th className="px-6 py-3.5">Tenant ID</th>
-                        <th className="px-6 py-3.5">Assigned Manager</th>
-                        <th className="px-6 py-3.5">Total Users</th>
-                        <th className="px-6 py-3.5">Curriculums</th>
-                        <th className="px-6 py-3.5">Provisioned Date</th>
-                        <th className="px-6 py-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTenants.map((t) => {
-                        const mgr = t.users?.find((u) => u.role === "MANAGER");
-                        return (
-                          <tr
-                            key={t.id}
-                            className="border-b border-neutral-800/40 last:border-0 hover:bg-neutral-800/30 transition"
-                          >
-                            <td className="px-6 py-4 font-semibold text-white">{t.name}</td>
-                            <td className="px-6 py-4 font-mono text-xs text-neutral-400">{t.id}</td>
-                            <td className="px-6 py-4 text-xs text-neutral-300">
-                              {mgr ? (
-                                <span className="text-blue-400 font-medium">{mgr.name} ({mgr.email})</span>
-                              ) : (
-                                <span className="text-neutral-500">No Manager</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4 text-neutral-300 text-xs font-mono">
-                              {t.userCount} Accounts
-                            </td>
-                            <td className="px-6 py-4 text-neutral-300 text-xs font-mono">
-                              {t.moduleCount} Modules
-                            </td>
-                            <td className="px-6 py-4 text-xs text-neutral-400">
-                              {new Date(t.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <button
-                                onClick={() => handleDeleteTenant(t.id, t.name)}
-                                disabled={deletingId === t.id}
-                                className="text-xs text-red-400/80 hover:text-red-300 transition font-medium disabled:opacity-50 inline-flex items-center gap-1"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span>{deletingId === t.id ? "Deleting..." : "Delete"}</span>
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* TAB 3: MANAGERS & STAFF DIRECTORY (REQUESTED FEATURE)    */}
+        {/* TAB 2: ALL MANAGERS & STAFF DIRECTORY (GLOBAL)           */}
         {/* ======================================================== */}
         {activeTab === "users" && (
           <div className="space-y-8 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">
+                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
                   Platform Managers &amp; Staff Directory
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
@@ -572,9 +620,37 @@ export default function SuperAdminView() {
               </button>
             </div>
 
-            {/* Filter Bar */}
+            {/* Quick Venue Filter Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <span className="text-xs text-neutral-400 font-semibold shrink-0">Filter by Venue:</span>
+              <button
+                onClick={() => setUserTenantFilter("ALL")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 border ${
+                  userTenantFilter === "ALL"
+                    ? "bg-blue-600 border-blue-400 text-white shadow-sm"
+                    : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white"
+                }`}
+              >
+                All Venues
+              </button>
+              {tenants.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setUserTenantFilter(t.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition shrink-0 border ${
+                    userTenantFilter === t.id
+                      ? "bg-blue-600 border-blue-400 text-white shadow-sm"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  {t.name} ({t.userCount})
+                </button>
+              ))}
+            </div>
+
+            {/* Search & Role Filter Bar */}
             <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-4 md:p-6 space-y-4 shadow-xl">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
                     Search Staff or Manager
@@ -600,24 +676,6 @@ export default function SuperAdminView() {
                     <option value="ALL">All Roles ({totalManagers + totalStaff})</option>
                     <option value="MANAGER">Managers Only ({totalManagers})</option>
                     <option value="STAFF">Staff Only ({totalStaff})</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
-                    Venue Organization
-                  </label>
-                  <select
-                    value={userTenantFilter}
-                    onChange={(e) => setUserTenantFilter(e.target.value)}
-                    className="w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2 text-xs text-white outline-none focus:border-blue-500"
-                  >
-                    <option value="ALL">All Venues</option>
-                    {tenants.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
                   </select>
                 </div>
               </div>
@@ -723,6 +781,69 @@ export default function SuperAdminView() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 3: PLATFORM OVERVIEW                                  */}
+        {/* ======================================================== */}
+        {activeTab === "overview" && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-neutral-900 border border-neutral-800 px-3 py-1 text-xs text-neutral-400 mb-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+                Global Platform Architecture
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                Enterprise Command Center
+              </h1>
+              <p className="mt-1 text-sm text-neutral-400">
+                Centralized oversight for multi-tenant isolation, general managers, staff compliance, and certification integrity.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <StatsCard
+                label="Provisioned Venues"
+                value={tenants.length}
+                icon={
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+                  </svg>
+                }
+                accent="text-blue-400"
+              />
+              <StatsCard
+                label="General Managers"
+                value={totalManagers}
+                icon={
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+                  </svg>
+                }
+                accent="text-purple-400"
+              />
+              <StatsCard
+                label="Certified Staff"
+                value={totalStaff}
+                icon={
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                  </svg>
+                }
+                accent="text-emerald-400"
+              />
+              <StatsCard
+                label="Active Curriculums"
+                value={totalModules}
+                icon={
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                    <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z" />
+                  </svg>
+                }
+                accent="text-amber-400"
+              />
             </div>
           </div>
         )}
