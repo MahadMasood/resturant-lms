@@ -10,12 +10,17 @@ interface StaffModuleCardProps {
     title: string;
     description: string | null;
     videoUrl: string;
+    orderIndex?: number;
+    questionCount?: number;
     watchedSeconds: number;
     durationSeconds: number;
     completed: boolean;
     quizPassed: boolean;
     quizScore: number | null;
+    attemptsCount?: number;
     certificateUrl: string | null;
+    isLocked?: boolean;
+    requiredPreviousTitle?: string | null;
   };
   staffName: string;
   onRefresh?: () => void;
@@ -31,14 +36,56 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
     if (onRefresh) onRefresh();
   };
 
+  // If this module is locked sequentially
+  if (module.isLocked) {
+    return (
+      <div className="rounded-3xl border border-neutral-800/80 bg-neutral-900/50 p-6 md:p-8 space-y-4 opacity-75">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-800 border border-neutral-700 text-neutral-400">
+              <svg className="w-5 h-5 fill-none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="rounded-full bg-neutral-800 px-2.5 py-0.5 text-[11px] font-semibold text-neutral-400 border border-neutral-700">
+                  Locked Curriculum
+                </span>
+              </div>
+              <h2 className="text-lg font-bold text-neutral-300">{module.title}</h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {module.description || "Anti-cheat video module and evaluation"}
+              </p>
+            </div>
+          </div>
+
+          <span className="text-xs text-neutral-500 font-mono shrink-0">
+            {module.questionCount ?? 3} Questions
+          </span>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 text-xs text-neutral-400 flex items-center gap-3">
+          <svg className="w-4 h-4 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p>
+            Prerequisite: Complete and pass accreditation for{" "}
+            <strong className="text-neutral-200">{module.requiredPreviousTitle || "previous module"}</strong> to unlock.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-7 shadow-lg space-y-5 transition">
+    <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-8 shadow-xl space-y-6 transition">
       {/* Header Badge & Title */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-xs font-semibold uppercase tracking-wider ${
                 module.quizPassed
                   ? "bg-emerald-950/80 border border-emerald-500/30 text-emerald-400"
                   : videoCompleted
@@ -62,7 +109,8 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
                 : "Watch Verification Required"}
             </span>
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">{module.title}</h2>
+
+          <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">{module.title}</h2>
           <p className="mt-1 text-xs md:text-sm text-neutral-400">
             {module.description ||
               "Watch at least 80% of the training video without skipping to unlock the accreditation evaluation."}
@@ -71,14 +119,17 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
 
         {module.quizScore !== null && (
           <div className="text-right shrink-0">
-            <p className="text-xs text-neutral-500 uppercase tracking-wider">Score</p>
+            <p className="text-[11px] text-neutral-500 uppercase tracking-wider">Score</p>
             <p
-              className={`text-lg font-bold ${
+              className={`text-xl font-bold ${
                 module.quizPassed ? "text-emerald-400" : "text-amber-400"
               }`}
             >
               {module.quizScore}%
             </p>
+            {module.attemptsCount && module.attemptsCount > 1 && (
+              <p className="text-[10px] text-neutral-500">{module.attemptsCount} Attempts</p>
+            )}
           </div>
         )}
       </div>
@@ -92,9 +143,9 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
       />
 
       {/* Bottom Action Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-800/80 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-neutral-800/80 pt-4">
         <div className="text-xs text-neutral-400">
-          Passing mark: <span className="font-semibold text-white">90%</span> to qualify for digital certification.
+          Passing mark: <span className="font-semibold text-white">90%</span> required for accreditation certificate.
         </div>
 
         <div className="flex items-center gap-3">
@@ -120,7 +171,7 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
           {videoCompleted ? (
             <Link
               href={`/dashboard/staff/quiz?moduleId=${encodeURIComponent(module.id)}`}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-xs font-semibold text-white transition shadow-lg ${
+              className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold text-white transition shadow-lg ${
                 module.quizPassed
                   ? "bg-neutral-800 border border-neutral-700 hover:bg-neutral-700"
                   : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25"

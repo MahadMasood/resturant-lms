@@ -1,19 +1,16 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
-
 export const metadata: Metadata = {
-  title: "LMS Portal",
-  description: "Restaurant Training Management System",
+  title: "Restaurant LMS — Enterprise Compliance & Training",
+  description: "Apple-grade restaurant compliance and video training portal with anti-cheat verification.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${geist.variable} font-sans antialiased bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-white`}>
+      <body className="font-sans antialiased bg-black text-white selection:bg-blue-600 selection:text-white">
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
