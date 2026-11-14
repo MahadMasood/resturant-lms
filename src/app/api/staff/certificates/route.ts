@@ -15,7 +15,7 @@ export async function GET() {
   });
 
   return NextResponse.json(
-    certs.map((c) => ({
+    certs.map((c: any) => ({
       id: c.id,
       moduleId: c.moduleId,
       moduleName: c.module.title,

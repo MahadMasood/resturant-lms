@@ -16,7 +16,7 @@ export async function GET() {
   });
 
   return NextResponse.json(
-    tenants.map((t) => ({
+    tenants.map((t: { id: string; name: string; createdAt: Date; _count: { users: number; modules: number } }) => ({
       id: t.id,
       name: t.name,
       createdAt: t.createdAt,

@@ -57,7 +57,7 @@ export async function PATCH(
   const { title, description, videoUrl, questions } = body;
 
   // Transaction to update module and refresh questions if provided
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: any) => {
     const mod = await tx.module.update({
       where: { id },
       data: {

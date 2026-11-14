@@ -70,8 +70,8 @@ export async function GET() {
             ? Math.round((wp.watchedSeconds / wp.durationSeconds) * 100)
             : 0;
 
-        const attempt = s.quizAttempts.find((qa) => qa.moduleId === wp.moduleId);
-        const cert = s.certificates.find((c) => c.moduleId === wp.moduleId);
+        const attempt = s.quizAttempts.find((qa: { moduleId: string; score: number; passed: boolean }) => qa.moduleId === wp.moduleId);
+        const cert = s.certificates.find((c: { moduleId: string; pdfUrl: string; issuedAt: Date }) => c.moduleId === wp.moduleId);
 
         rows.push([
           `"${tenantName}"`,

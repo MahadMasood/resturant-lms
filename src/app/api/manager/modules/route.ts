@@ -16,7 +16,7 @@ export async function GET() {
     orderBy: { orderIndex: "asc" },
   });
 
-  return NextResponse.json(modules.map((m) => ({ ...m, questionCount: m._count.questions })));
+  return NextResponse.json(modules.map((m: any) => ({ ...m, questionCount: m._count.questions })));
 }
 
 // POST /api/manager/modules — create a new module

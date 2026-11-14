@@ -32,11 +32,11 @@ export async function GET() {
     },
   });
 
-  const result = users.map((u) => ({
+  const result = users.map((u: any) => ({
     userId: u.id,
     name: u.name,
     email: u.email,
-    progress: u.watchProgress.map((wp) => ({
+    progress: u.watchProgress.map((wp: any) => ({
       moduleId: wp.moduleId,
       moduleTitle: wp.module.title,
       watchedSeconds: wp.watchedSeconds,
@@ -44,13 +44,13 @@ export async function GET() {
       completed: wp.completed,
       percent: wp.durationSeconds > 0 ? Math.round((wp.watchedSeconds / wp.durationSeconds) * 100) : 0,
     })),
-    quizAttempts: u.quizAttempts.map((qa) => ({
+    quizAttempts: u.quizAttempts.map((qa: any) => ({
       moduleId: qa.moduleId,
       score: qa.score,
       passed: qa.passed,
       createdAt: qa.createdAt,
     })),
-    certificates: u.certificates.map((c) => ({
+    certificates: u.certificates.map((c: any) => ({
       moduleId: c.moduleId,
       pdfUrl: c.pdfUrl,
       issuedAt: c.issuedAt,

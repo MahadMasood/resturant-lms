@@ -21,7 +21,7 @@ export async function GET() {
     },
   });
 
-  const result = modules.map((m) => {
+  const result = modules.map((m: any) => {
     const wp = m.watchProgress[0];
     const qa = m.quizAttempts[0];
     const cert = m.certificates[0];
