@@ -1,24 +1,47 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { findUserByEmail, ROLE_DASHBOARD } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
+
+const ROLE_DASHBOARD: Record<string, string> = {
+  SUPER_ADMIN: "/dashboard/super-admin",
+  MANAGER: "/dashboard/manager",
+  STAFF: "/dashboard/staff",
+};
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  session: { strategy: "jwt" },
+  pages: { signIn: "/login" },
   providers: [
     Credentials({
+      name: "credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const user = findUserByEmail(credentials?.email as string);
-        if (!user || user.password !== credentials?.password) return null;
+        const email = credentials?.email as string | undefined;
+        const password = credentials?.password as string | undefined;
+
+        if (!email || !password) return null;
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+          include: { tenant: true },
+        });
+
+        if (!user) return null;
+
+        const valid = await bcrypt.compare(password, user.passwordHash);
+        if (!valid) return null;
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
-          tenantId: user.tenantId,
-          tenantName: user.tenantName,
+          tenantId: user.tenantId ?? null,
+          tenantName: user.tenant?.name ?? null,
         };
       },
     }),
@@ -26,35 +49,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // @ts-expect-error – extending default JWT type
+        token.id = user.id;
         token.role = user.role;
-        // @ts-expect-error
         token.tenantId = user.tenantId;
-        // @ts-expect-error
         token.tenantName = user.tenantName;
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        // @ts-expect-error – extending default Session type
-        session.user.role = token.role;
-        // @ts-expect-error
-        session.user.tenantId = token.tenantId;
-        // @ts-expect-error
-        session.user.tenantName = token.tenantName;
-      }
+      session.user.id = token.id as string;
+      session.user.role = token.role as string;
+      session.user.tenantId = (token.tenantId as string) ?? null;
+      session.user.tenantName = (token.tenantName as string) ?? null;
       return session;
     },
     async redirect({ url, baseUrl }) {
-      return url.startsWith(baseUrl) ? url : baseUrl;
+      // After sign-in, redirect to role dashboard
+      if (url.startsWith(baseUrl) || url.startsWith("/")) return url;
+      return baseUrl;
     },
   },
-  pages: {
-    signIn: "/login",
-  },
-  session: { strategy: "jwt" },
 });
 
 export { ROLE_DASHBOARD };
-
