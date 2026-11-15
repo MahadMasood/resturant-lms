@@ -40,8 +40,8 @@ export default function HomePage() {
 
       {/* ─── Navigation ─────────────────────────────────────────────────── */}
       <header className="fixed inset-x-0 top-0 z-50 h-11 border-b border-white/10 bg-black/60 backdrop-blur-xl backdrop-saturate-150">
-        <nav className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" aria-label="The Himalayan Reserve, home" className="group flex items-center gap-3">
+        <nav className="mx-auto grid h-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+          <Link href="/" aria-label="The Himalayan Reserve, home" className="group col-start-1 flex items-center gap-3 justify-self-start">
             <Image
               src="/logo-mark.png"
               alt=""
@@ -56,7 +56,7 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <div className="hidden items-center gap-7 text-xs text-neutral-300 lg:flex">
+          <div className="col-start-2 hidden items-center gap-7 text-xs text-neutral-300 lg:flex">
             {NAV_LINKS.map((link) => (
               <a key={link.href} href={link.href} className="link-underline transition-colors hover:text-white">
                 {link.label}
@@ -64,9 +64,11 @@ export default function HomePage() {
             ))}
           </div>
 
-          <Suspense fallback={<SignInLink />}>
-            <AccountLink />
-          </Suspense>
+          <div className="col-start-3 justify-self-end">
+            <Suspense fallback={<SignInLink />}>
+              <AccountLink />
+            </Suspense>
+          </div>
         </nav>
       </header>
 
