@@ -15,7 +15,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#000000] text-white selection:bg-rose-500 selection:text-white antialiased font-sans overflow-x-hidden">
-      {/* ─── 0. Scroll Progress Bar (Pink & Gold Gradient) ──────────────────── */}
+      {/* ─── 0. Scroll Progress Bar (Pink & Gold) ──────────────────────────── */}
       <ScrollProgressBar />
 
       {/* ─── 1. Apple Luxury Navigation Bar (44px) ─────────────────────────── */}
@@ -33,19 +33,19 @@ export default async function HomePage() {
                 Salt<span className="text-rose-400">Craft</span>
               </span>
               <span className="hidden sm:inline-block text-[10px] text-amber-300 font-mono tracking-wider">
-                &bull; Mineral LMS
+                &bull; Himalayan Culinary Slabs
               </span>
             </div>
           </Link>
 
-          {/* Center Links */}
+          {/* Center Links (Consumer & Food Focused) */}
           <div className="hidden lg:flex items-center gap-7 text-[12px] text-neutral-300 font-medium">
-            <Link href="#culinary-alchemy" className="hover:text-rose-300 transition">Culinary Alchemy</Link>
+            <Link href="#culinary-magic" className="hover:text-rose-300 transition">The Salt Experience</Link>
             <Link href="#interactive-slab" className="hover:text-amber-300 transition">Slab Simulator</Link>
             <Link href="#minerals" className="hover:text-rose-300 transition">84 Trace Minerals</Link>
-            <Link href="#health-meter" className="hover:text-amber-300 transition">40-Cook Health Meter</Link>
-            <Link href="#curriculum" className="hover:text-rose-300 transition">Staff Accreditation</Link>
-            <Link href="#verification" className="hover:text-amber-300 transition">Public Registry</Link>
+            <Link href="#health-meter" className="hover:text-amber-300 transition">The 40-Cook Journey</Link>
+            <Link href="#golden-rules" className="hover:text-rose-300 transition">Cooking Rules</Link>
+            <Link href="#table-side" className="hover:text-amber-300 transition">Steak Inspiration</Link>
           </div>
 
           {/* Right Action */}
@@ -55,31 +55,23 @@ export default async function HomePage() {
                 href={dashboardHref}
                 className="rounded-full bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-1 text-[11px] font-bold text-white hover:opacity-95 transition shadow-md shadow-rose-900/30"
               >
-                Enter Portal
+                My Dashboard
               </Link>
             ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/login"
-                  className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20 transition"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/login"
-                  className="rounded-full bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 px-3.5 py-1 text-[11px] font-bold text-white hover:brightness-110 transition shadow-[0_2px_12px_rgba(244,114,182,0.35)]"
-                >
-                  Academy Portal
-                </Link>
-              </div>
+              <Link
+                href="/login"
+                className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20 transition backdrop-blur-md"
+              >
+                Restaurant Sign In
+              </Link>
             )}
           </div>
         </nav>
       </header>
 
-      {/* ─── 2. Hero: Pink, Black & Gold Apple Showcase ─────────────────────── */}
+      {/* ─── 2. Hero: Pink, Black & Gold Luxury Culinary Showcase ────────────── */}
       <section className="relative overflow-hidden pt-20 pb-28 px-6 border-b border-rose-500/20 bg-gradient-to-b from-[#1c0a15] via-[#0d040a] to-[#000000]">
-        {/* Layer 1: Radial Specular Light Cone in Rose & Champagne Gold */}
+        {/* Specular Radial Cone in Rose & Champagne Gold */}
         <div
           className="absolute inset-0 pointer-events-none opacity-80"
           style={{
@@ -88,10 +80,10 @@ export default async function HomePage() {
           }}
         />
 
-        {/* Layer 2: Glossy Diagonal Sheen Reflection */}
+        {/* Ambient Glossy Sheen */}
         <div className="absolute -inset-x-40 -top-40 h-[600px] pointer-events-none bg-gradient-to-tr from-transparent via-rose-300/[0.06] to-transparent rotate-12 blur-2xl opacity-60" />
 
-        {/* Layer 3: Ambient Blurred Rose & Warm Gold Orbs */}
+        {/* Ambient Blurred Rose & Warm Gold Orbs */}
         <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-rose-500/15 blur-[140px] pointer-events-none" />
         <div className="absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-amber-500/15 blur-[150px] pointer-events-none" />
 
@@ -101,7 +93,7 @@ export default async function HomePage() {
             <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-950/40 px-4 py-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2)] backdrop-blur-md">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
               <span className="text-[11px] font-bold uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-rose-300 via-amber-200 to-amber-400">
-                250-Million-Year-Old Himalayan Mineral Matrix
+                250-Million-Year-Old Ancient Rock Salt &bull; Khewra Foothills
               </span>
             </div>
           </ScrollReveal>
@@ -110,14 +102,14 @@ export default async function HomePage() {
             <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-[1.08] max-w-4xl mx-auto">
               Pure Himalayan Salt Slabs.
               <span className="block mt-2 text-transparent bg-clip-text bg-gradient-to-r from-rose-300 via-rose-200 to-amber-300">
-                The Science of Searing &bull; Certified.
+                The Ultimate Steak Sear &amp; Mineral Infusion.
               </span>
             </h1>
           </ScrollReveal>
 
           <ScrollReveal variant="fade-up" delay={0.3}>
             <p className="mx-auto max-w-2xl text-base sm:text-lg text-neutral-300/90 font-normal leading-relaxed">
-              Hand-carved ancient crystalline rock salt for high-temperature steak searing and cold presentation. Infuse cuts with 84 essential minerals, track the 40-cook health meter lifecycle, and verify kitchen staff accreditation.
+              Hand-carved crystalline mineral blocks that transform everyday cooking into extraordinary steakhouse theater. Sizzle prime cuts at 450&deg;F+ with natural trace minerals, or chill to 0&deg;F for delicate beef carpaccio and sashimi.
             </p>
           </ScrollReveal>
 
@@ -125,30 +117,30 @@ export default async function HomePage() {
           <ScrollReveal variant="fade-up" delay={0.4}>
             <div className="flex flex-wrap items-center justify-center gap-3.5 pt-3">
               <Link
-                href="/login"
+                href="#interactive-slab"
                 className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:brightness-110 px-7 py-3 text-sm font-bold text-white transition shadow-xl shadow-rose-900/40"
               >
-                <span>Enter Training Academy</span>
+                <span>Try The 3D Slab Simulator</span>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
               </Link>
 
               <Link
-                href="/verify"
+                href="#culinary-magic"
                 className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-black/60 hover:bg-neutral-900 px-6 py-3 text-sm font-semibold text-amber-200 transition backdrop-blur-md"
               >
                 <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <span>Verify Public Certificate</span>
+                <span>Why It Tastes Better</span>
               </Link>
 
               <Link
                 href="#health-meter"
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-neutral-950 px-5 py-3 text-sm font-medium text-neutral-400 hover:text-white transition"
               >
-                <span>40-Cook Health Meter</span>
+                <span>The 40-Cook Lifespan</span>
               </Link>
             </div>
           </ScrollReveal>
@@ -163,24 +155,24 @@ export default async function HomePage() {
       </section>
 
       {/* ─── 3. Section: The Culinary Alchemy (Why Salt Slabs?) ─────────────── */}
-      <section id="culinary-alchemy" className="relative py-24 px-6 border-b border-white/10 bg-[#050204]">
+      <section id="culinary-magic" className="relative py-24 px-6 border-b border-white/10 bg-[#050204]">
         <div className="mx-auto max-w-6xl space-y-16">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
             <div className="inline-flex items-center gap-2 rounded-full border border-rose-500/30 bg-rose-950/30 px-3.5 py-1 text-xs text-rose-300">
               <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-              Gastronomic Superiority
+              Gastronomic Alchemy
             </div>
             <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
-              Why Premier Steakhouses Sear On Salt.
+              Why Steaks Taste Better On Salt.
             </h2>
             <p className="text-sm sm:text-base text-neutral-400 leading-relaxed">
-              Standard cast iron pans trap steam and scorch meat juices. Pure Himalayan crystalline slabs conduct uniform intense heat, natural mineral seasoning, and immediate crust caramelization.
+              Standard pans trap steam and boil your meat in its own moisture. Pure Himalayan crystalline slabs conduct dry, blistering heat, infuse subtle natural minerals, and create a crisp caramelized crust.
             </p>
           </div>
 
-          {/* 4 Core Pillars (3D Tilt Cards) */}
+          {/* 4 Core Culinary Benefits (3D Tilt Cards) */}
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Pillar 1: Subtle Mineral Seasoning */}
+            {/* Benefit 1 */}
             <TiltCard3D maxTilt={10}>
               <div className="h-full rounded-3xl border border-rose-500/30 bg-gradient-to-b from-[#180a13] to-[#0c0409] p-8 space-y-4 shadow-xl">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-950 border border-rose-500/40 text-rose-400 shadow-lg">
@@ -192,15 +184,15 @@ export default async function HomePage() {
                   Subtle Salinity &bull; Never Over-Salted
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
-                  Unlike granule table salt that dissolves into a harsh saline burst, crystalline rock salt has near-zero porosity. It dissolves only microscopically against the meat&apos;s natural surface moisture, delivering delicate, balanced seasoning that enhances the beef&apos;s natural umami profile.
+                  Unlike shaker salt that dissolves instantly into a harsh, stinging burst, solid crystalline rock salt has near-zero porosity. It transfers only a microscopic, delicate layer of minerals against the steak&apos;s natural surface moisture (~1.2% infusion rate). You taste pure, rich beef flavor elevated by sweet, natural minerals.
                 </p>
                 <div className="pt-2 text-[11px] font-mono text-rose-300 border-t border-rose-500/20">
-                  Micro-Dissolution: ~1.2% sodium chloride infusion rate
+                  Infusion Science: Micro-contact seasoning without fluid loss
                 </div>
               </div>
             </TiltCard3D>
 
-            {/* Pillar 2: 84 Essential Trace Minerals */}
+            {/* Benefit 2 */}
             <TiltCard3D maxTilt={10}>
               <div className="h-full rounded-3xl border border-amber-500/30 bg-gradient-to-b from-[#18110a] to-[#0c0804] p-8 space-y-4 shadow-xl">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-950 border border-amber-500/40 text-amber-400 shadow-lg">
@@ -212,15 +204,15 @@ export default async function HomePage() {
                   84 Synergistic Trace Minerals
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
-                  The distinctive pink crystalline hue is produced by natural trace iron. Rich in magnesium, potassium, and calcium, the ancient Khewra mineral matrix imparts a deep, earthy terroir that synthetic salts and stainless pans simply cannot duplicate.
+                  The iconic pink rose hue comes from natural elemental iron. Loaded with potassium, magnesium, and calcium, the ancient Khewra seabed mineral matrix imparts complex terroir and smooth, savory depth that processed table salt or nonstick skillets cannot replicate.
                 </p>
                 <div className="pt-2 text-[11px] font-mono text-amber-300 border-t border-amber-500/20">
-                  Matrix: Fe, Mg, K, Ca, Zn, Cu &bull; Ancient Khewra Mine Origin
+                  Mineral Complex: Iron (Fe), Magnesium (Mg), Potassium (K), Calcium (Ca)
                 </div>
               </div>
             </TiltCard3D>
 
-            {/* Pillar 3: Scorching 450°F+ Thermal Convection */}
+            {/* Benefit 3 */}
             <TiltCard3D maxTilt={10}>
               <div className="h-full rounded-3xl border border-amber-500/30 bg-gradient-to-b from-[#18110a] to-[#0c0804] p-8 space-y-4 shadow-xl">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-950 border border-amber-500/40 text-amber-400 shadow-lg">
@@ -229,18 +221,18 @@ export default async function HomePage() {
                   </svg>
                 </div>
                 <h3 className="text-xl font-bold text-white tracking-tight">
-                  Intense 450&deg;F+ Sear &bull; Table-Side Sizzle
+                  Blistering 450&deg;F+ Sear &bull; Table-Side Theater
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
-                  High specific heat capacity allows dense salt blocks to absorb and store thermal energy, retaining searing temperatures for 40+ minutes at guest tables. Direct dry heat ensures instantaneous Maillard crusting while locking inside all tender juices.
+                  Dense mineral rock absorbs tremendous heat energy and holds it effortlessly. Heat the slab on your stovetop or outdoor grill, transfer it onto its metal base ring, and bring it straight to the dining table. Sizzle ribeye, wagyu, and tomahawk strips right before your guests&apos; eyes.
                 </p>
                 <div className="pt-2 text-[11px] font-mono text-amber-300 border-t border-amber-500/20">
-                  Heat Range: 200&deg;F &rarr; 450&deg;F+ Sear &bull; Sustained Convection
+                  Thermal Retention: Sizzles at dining tables for 40+ minutes
                 </div>
               </div>
             </TiltCard3D>
 
-            {/* Pillar 4: Dual Hot & Cold Versatility */}
+            {/* Benefit 4 */}
             <TiltCard3D maxTilt={10}>
               <div className="h-full rounded-3xl border border-rose-500/30 bg-gradient-to-b from-[#180a13] to-[#0c0409] p-8 space-y-4 shadow-xl">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-950 border border-rose-500/40 text-rose-400 shadow-lg">
@@ -249,13 +241,13 @@ export default async function HomePage() {
                   </svg>
                 </div>
                 <h3 className="text-xl font-bold text-white tracking-tight">
-                  Dual Thermal Searing &amp; Curing Platters
+                  Dual Thermal Magic (Hot Sizzle &amp; Ice-Cold Curing)
                 </h3>
                 <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed">
-                  When frozen down to 0&deg;F (-18&deg;C) in walk-in freezers, salt serving platters hold sub-zero temperatures for 90 minutes. Presenting beef carpaccio, tuna tartare, sashimi, and carved steaks on cold salt initiates a light curing reaction that creates unrivaled texture.
+                  Pop the slab in the freezer for two hours to transform it into a sub-zero chilled serving platter. Thinly sliced beef carpaccio, tuna tartare, fresh sushi, or artisanal cheese served on cold salt undergo a gentle ambient cure, creating a silky texture with balanced seasoning.
                 </p>
                 <div className="pt-2 text-[11px] font-mono text-rose-300 border-t border-rose-500/20">
-                  Sub-Zero Holding: 0&deg;F to 32&deg;F &bull; Zero Melting Dilution
+                  Chilled Range: Sub-zero holding down to 0&deg;F (-18&deg;C)
                 </div>
               </div>
             </TiltCard3D>
@@ -263,99 +255,99 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ─── 4. Section: The 84 Minerals & Searing Science ─────────────────── */}
+      {/* ─── 4. Section: The 84 Minerals & Taste Chemistry ─────────────────── */}
       <section id="minerals" className="py-24 px-6 border-b border-rose-500/20 bg-[#000000]">
         <div className="mx-auto max-w-6xl space-y-16">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
               <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-bold">
-                Trace Chemistry &bull; Khewra Salt Mines
+                Natural Terroir &bull; Khewra Salt Mines
               </span>
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-1">
-                The Himalayan Mineral Breakdown.
+                The Himalayan Mineral Profile.
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-neutral-400 max-w-md">
-              Formed during the Precambrian era when a primordial ocean evaporated. Hand-selected slabs undergo strict purity screening before kitchen commissioning.
+              Formed over 250 million years ago under tectonic pressure. Unrefined, unbleached, and free from plastic or chemical micro-contaminants.
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="rounded-2xl border border-rose-500/30 bg-[#12080f] p-5 space-y-2">
-              <span className="text-xs font-mono text-rose-400 font-bold block">01 &bull; Iron (Fe)</span>
-              <h4 className="text-lg font-bold text-white">Rose Pink Hue</h4>
+              <span className="text-xs font-mono text-rose-400 font-bold block">01 &bull; Natural Iron (Fe)</span>
+              <h4 className="text-lg font-bold text-white">Rose Quartz Pink</h4>
               <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Natural oxidized iron crystals provide the signature Himalayan blush. Accelerates surface caramelization during high-temp sears.
+                Gives the slab its unmistakable pink hue while aiding heat conduction and searing crust formation on meats.
               </p>
             </div>
 
             <div className="rounded-2xl border border-amber-500/30 bg-[#120d08] p-5 space-y-2">
               <span className="text-xs font-mono text-amber-400 font-bold block">02 &bull; Magnesium (Mg)</span>
-              <h4 className="text-lg font-bold text-white">Palate Softness</h4>
+              <h4 className="text-lg font-bold text-white">Velvety Finish</h4>
               <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Tempers sharp sodium bites, transforming simple saltiness into complex, lingering savory terroir on wagyu and prime cuts.
+                Softens the sodium strike, turning raw saltiness into a mellow, savory sweetness that coats prime beef cuts.
               </p>
             </div>
 
             <div className="rounded-2xl border border-amber-500/30 bg-[#120d08] p-5 space-y-2">
               <span className="text-xs font-mono text-amber-400 font-bold block">03 &bull; Potassium (K)</span>
-              <h4 className="text-lg font-bold text-white">Cellular Moisture</h4>
+              <h4 className="text-lg font-bold text-white">Juicy Tenderness</h4>
               <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Balances osmotic pressure across meat fibers, preventing excessive fluid loss during 450&deg;F contact.
+                Supports natural cellular moisture retention, ensuring wagyu and ribeyes remain luscious and tender inside.
               </p>
             </div>
 
             <div className="rounded-2xl border border-rose-500/30 bg-[#12080f] p-5 space-y-2">
               <span className="text-xs font-mono text-rose-400 font-bold block">04 &bull; Calcium (Ca)</span>
-              <h4 className="text-lg font-bold text-white">Crystalline Density</h4>
+              <h4 className="text-lg font-bold text-white">Solid Crystal Core</h4>
               <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Reinforces the mineral lattice, granting immense thermal inertia and durability under repeated 40-cook cycles.
+                Forms the dense crystalline structure that enables the slab to withstand 40+ high-heat searing cycles.
               </p>
             </div>
           </div>
 
-          {/* Golden Operating Protocol Card */}
+          {/* 3-Stage Heating Rule Card */}
           <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-r from-[#1f0e16] via-[#150a10] to-[#120c05] p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 rounded-full bg-amber-500/20 border border-amber-400/40 px-3 py-1 text-xs text-amber-300 font-bold">
-                Kitchen Protocol Standard
+                The Secret To Long-Lasting Slabs
               </div>
               <h3 className="text-xl font-bold text-white">
-                The 3-Stage Heating Protocol (Prevent Fracturing)
+                The 3-Stage Gentle Heating Curve
               </h3>
               <p className="text-xs sm:text-sm text-neutral-300 max-w-2xl leading-relaxed">
-                Stage 1: 200&deg;F (15 min) &rarr; Stage 2: 300&deg;F (15 min) &rarr; Stage 3: 450&deg;F+ Sear (15 min). Slow gradual heating safely vaporizes ambient moisture trapped in the crystal matrix, preventing thermal cracks.
+                Never rush heating a cold salt slab. Start low at 200&deg;F for 15 minutes, step up to 300&deg;F for 15 minutes, then finish at 450&deg;F+ for your sear. This gently evaporates trapped moisture and ensures your slab lasts for 40+ wonderful dinners.
               </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/60 p-4 text-center shrink-0 w-full md:w-auto">
               <span className="text-[10px] text-neutral-400 uppercase tracking-widest block font-mono">
-                Water-Drop Test
+                Water Sizzle Test
               </span>
               <span className="text-xl font-bold text-amber-400 font-mono mt-0.5 block">
-                Instant Sizzle
+                Instant Evaporation
               </span>
               <span className="text-[10px] text-neutral-500 block mt-0.5">
-                450&deg;F Readiness Indicator
+                450&deg;F Perfect Sear Ready
               </span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── 5. Section: The 40-Cook Health Meter & Equipment Lifecycle ─────── */}
+      {/* ─── 5. Section: The 40-Cook Journey & Equipment Trio ───────────────── */}
       <section id="health-meter" className="py-24 px-6 border-b border-rose-500/20 bg-[#060205]">
         <div className="mx-auto max-w-6xl space-y-14">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-3.5 py-1 text-xs text-amber-300">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              Equipment Lifecycle Architecture
+              Slab Lifespan &amp; Care
             </div>
             <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
-              The 40-Cook Health Meter.
+              The 40-Cook Journey.
             </h2>
             <p className="text-sm sm:text-base text-neutral-400 leading-relaxed">
-              Salt slabs naturally surrender microscopic layers of mineral during searing and maintenance. Our platform automates the 40-cook lifecycle, alerting managers before slabs reach critical wear.
+              Every time you sear, a microscopic whisper of mineral salt seasons your steak. A single thick hand-carved slab provides approximately 40 unforgettable dinner parties before evolving into gourmet finishing salt.
             </p>
           </div>
 
@@ -367,225 +359,161 @@ export default async function HomePage() {
             <div className="rounded-3xl border border-rose-500/30 bg-[#10070d] p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-rose-300">
-                  Salt Cooking Plate
+                  Salt Cooking Slab
                 </span>
-                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
-                  40 Max Cooks
+                <span className="rounded-full bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
+                  ~40 Sizzles
                 </span>
               </div>
-              <h4 className="text-base font-bold text-white">Hot Sear Mineral Slabs</h4>
+              <h4 className="text-base font-bold text-white">Hand-Carved Mineral Block</h4>
               <p className="text-xs text-neutral-400 leading-relaxed">
-                Hand-carved 8x8x2-inch slabs designed specifically for searing steaks. Managers track each plate&apos;s exact cook count with instant &apos;+1 Cook&apos; logging buttons.
+                Solid 8x8x2-inch slab crafted for blistering heat. Retains thermal energy for 40+ minutes at the table so guests can cook each bite to their preferred doneness.
               </p>
             </div>
 
             <div className="rounded-3xl border border-amber-500/30 bg-[#100c06] p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                  Metal Support Ring
+                  Metal Ring Trivet
                 </span>
-                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/30">
-                  Heavy-Duty Trivet
+                <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/30">
+                  Essential Base
                 </span>
               </div>
-              <h4 className="text-base font-bold text-white">Heat Convection Base Rings</h4>
+              <h4 className="text-base font-bold text-white">Flame Convection &amp; Safety</h4>
               <p className="text-xs text-neutral-400 leading-relaxed">
-                Heavy cast iron or stainless rings that elevate the salt slab above open burner flames, ensuring uniform heat circulation and preventing hot-spot fracture points.
+                Elevates your salt slab over gas burners to circulate heat evenly without direct flame hot-spots, and serves as an insulated trivet on dining tables.
               </p>
             </div>
 
             <div className="rounded-3xl border border-rose-500/30 bg-[#10070d] p-6 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-rose-300">
-                  Serving Platters
+                  Serving Platter
                 </span>
-                <span className="rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
-                  Cold Service
+                <span className="rounded-full bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30">
+                  Cold Display
                 </span>
               </div>
-              <h4 className="text-base font-bold text-white">Chilled Presentation Slabs</h4>
+              <h4 className="text-base font-bold text-white">Chilled Presentation Board</h4>
               <p className="text-xs text-neutral-400 leading-relaxed">
-                Smooth-polished slabs used for dining room presentation of chilled carpaccio, tomahawk steak carving, and cured meat boards at optimal temperatures.
+                Keeps cold cuts, seafood, sushi, and tartare beautifully chilled for over 90 minutes while adding a hint of delicate mineral seasoning to every slice.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── 6. Section: Staff Accreditation (Anti-Cheat LMS) ──────────────── */}
-      <section id="curriculum" className="py-24 px-6 border-b border-rose-500/20 bg-[#000000]">
+      {/* ─── 6. Section: The 4 Golden Rules of Salt Cooking ────────────────── */}
+      <section id="golden-rules" className="py-24 px-6 border-b border-rose-500/20 bg-[#000000]">
         <div className="mx-auto max-w-6xl space-y-16">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div>
-              <span className="text-xs font-mono uppercase tracking-widest text-rose-400 font-bold">
-                Hospitality LMS &bull; Anti-Cheat Engine
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-1">
-                Accredited Salt Slab Mastery.
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-neutral-400 max-w-md">
-              Line cooks and service staff complete verified video masterclasses, master temperature protocols, and pass strict 90% examinations.
-            </p>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-[#0c050a] p-6 space-y-3.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950 border border-rose-500/40 text-rose-300 font-bold text-sm">
-                01
-              </div>
-              <h3 className="text-base font-bold text-white">Sequential Anti-Cheat Player</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
-                Seek-scrubbing is strictly prevented. Staff must watch full video demonstrations of gradual pre-heating, steak searing, and wire-brush cleaning before evaluations unlock.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-[#0c0905] p-6 space-y-3.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-950 border border-amber-500/40 text-amber-300 font-bold text-sm">
-                02
-              </div>
-              <h3 className="text-base font-bold text-white">Strict 90% Passing Threshold</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
-                Graded securely on the server. Questions randomize and test internal steak temperatures, metal base ring safety, oiling protocols, and 40-cook retirement standards.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-[#0c050a] p-6 space-y-3.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950 border border-rose-500/40 text-rose-300 font-bold text-sm">
-                03
-              </div>
-              <h3 className="text-base font-bold text-white">Cryptographic Digital Certificate</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">
-                Upon graduation, an official PDF certificate is generated with a unique tamper-proof accreditation hash, verifiable by dining guests and health inspectors.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 7. Section: Public Verification & Health Registry ─────────────── */}
-      <section id="verification" className="py-24 px-6 border-b border-rose-500/20 bg-[#050204]">
-        <div className="mx-auto max-w-4xl text-center space-y-8">
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-            Public Accreditation Portal
-          </div>
-
-          <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white max-w-3xl mx-auto">
-            Instant Certificate Verification For Health Audits.
-          </h2>
-
-          <p className="text-sm sm:text-base text-neutral-400 max-w-2xl mx-auto leading-relaxed">
-            Inspectors and dining patrons can verify employee training certificates by ID without logging in. Ensures food safety compliance, zero soap contamination, and kitchen integrity.
-          </p>
-
-          <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/verify?certId=CERT-GRANDBISTRO-001"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-600 hover:brightness-110 px-7 py-3.5 text-xs font-bold text-white transition shadow-xl shadow-amber-500/20"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <span>Verify Sample Certificate (CERT-GRANDBISTRO-001)</span>
-            </Link>
-
-            <Link
-              href="/verify"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-neutral-700 bg-neutral-900 px-6 py-3.5 text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
-            >
-              <span>Search Accreditation Registry</span>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 8. Section: Multi-Tenant Architecture & Roles ─────────────────── */}
-      <section className="py-24 px-6 border-b border-rose-500/20 bg-[#000000]">
-        <div className="mx-auto max-w-6xl space-y-12">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <span className="text-xs font-mono uppercase tracking-widest text-amber-400 font-bold">
-              Multi-Tenant Architecture
+            <span className="text-xs font-mono uppercase tracking-widest text-rose-400 font-bold">
+              Culinary Best Practices
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              Enterprise Control Across Every Venue.
+              The 4 Golden Rules of Salt Slab Cooking.
             </h2>
             <p className="text-xs sm:text-sm text-neutral-400">
-              Complete isolation for multi-location steakhouse groups, regional managers, and kitchen teams.
+              Follow these simple timeless steps for foolproof results every time you cook.
             </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
-            {/* Super Admin */}
-            <div className="rounded-3xl border border-rose-500/30 bg-[#11070e] p-6 space-y-4">
-              <span className="rounded-full bg-rose-950 px-3 py-1 text-[10px] font-bold text-rose-300 border border-rose-500/40 uppercase tracking-wider">
-                Super Admin
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-3xl border border-white/10 bg-[#0c050a] p-6 space-y-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-950 border border-rose-500/40 text-rose-400 font-bold text-xs">
+                01
               </span>
-              <h3 className="text-lg font-bold text-white">Global Command</h3>
-              <ul className="space-y-2 text-xs text-neutral-300">
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Provision new restaurant venues in seconds</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Restaurant-wise audit of salt slabs and 40-cook meters</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Full staff directory drilldown and certificate oversight</span>
-                </li>
-              </ul>
+              <h3 className="text-base font-bold text-white">Oil Meat, Never The Slab</h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Lightly brush avocado or grapeseed oil onto your steak directly. Never pour oil on the slab &mdash; hot oil traps into crystal fissures and causes smoking.
+              </p>
             </div>
 
-            {/* General Manager */}
-            <div className="rounded-3xl border border-amber-500/30 bg-[#110d06] p-6 space-y-4">
-              <span className="rounded-full bg-amber-950 px-3 py-1 text-[10px] font-bold text-amber-300 border border-amber-500/40 uppercase tracking-wider">
-                General Manager
+            <div className="rounded-3xl border border-white/10 bg-[#0c0905] p-6 space-y-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-950 border border-amber-500/40 text-amber-400 font-bold text-xs">
+                02
               </span>
-              <h3 className="text-lg font-bold text-white">Restaurant Hub</h3>
-              <ul className="space-y-2 text-xs text-neutral-300">
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                  <span>Log cooking plate sears with instant &apos;+1 Cook&apos; buttons</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                  <span>Manage metal base rings and steak presentation platters</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                  <span>Export Inspector-ready compliance CSV reports</span>
-                </li>
-              </ul>
+              <h3 className="text-base font-bold text-white">The Sizzle Test</h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Always flick a drop of water onto the slab before cooking. It must sizzle, dance, and vaporize instantly. If it doesn&apos;t, keep heating.
+              </p>
             </div>
 
-            {/* Kitchen Staff */}
-            <div className="rounded-3xl border border-rose-500/30 bg-[#11070e] p-6 space-y-4">
-              <span className="rounded-full bg-rose-950 px-3 py-1 text-[10px] font-bold text-rose-300 border border-rose-500/40 uppercase tracking-wider">
-                Kitchen Staff
+            <div className="rounded-3xl border border-white/10 bg-[#0c050a] p-6 space-y-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-950 border border-rose-500/40 text-rose-400 font-bold text-xs">
+                03
               </span>
-              <h3 className="text-lg font-bold text-white">Training Portal</h3>
-              <ul className="space-y-2 text-xs text-neutral-300">
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Anti-cheat video player with progressive unlock</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Interactive 90% threshold multiple-choice quiz</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
-                  <span>Official downloadable &amp; printable PDF certificate</span>
-                </li>
-              </ul>
+              <h3 className="text-base font-bold text-white">Zero Soap, Zero Water Soaks</h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Salt is naturally antimicrobial. Let the slab cool to room temperature, scrape charred bits with a damp sponge or scouring pad, and dry immediately. Never use soap.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0c0905] p-6 space-y-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-950 border border-amber-500/40 text-amber-400 font-bold text-xs">
+                04
+              </span>
+              <h3 className="text-base font-bold text-white">Repurpose The Depleted Slab</h3>
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                When your slab eventually thins after ~40 cooks, don&apos;t throw it away! Crush the remaining mineral rock in a mortar for the most delectable finishing salt in your pantry.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── 9. Apple Luxury Footer (Pink, Black & Gold) ────────────────────── */}
+      {/* ─── 7. Section: Table-Side Sizzle Inspiration ─────────────────────── */}
+      <section id="table-side" className="py-24 px-6 border-b border-rose-500/20 bg-[#050204]">
+        <div className="mx-auto max-w-6xl space-y-16">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-4 py-1.5 text-xs text-amber-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              Dining Inspiration
+            </div>
+            <h2 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
+              What To Cook On Your Salt Slab.
+            </h2>
+            <p className="text-sm sm:text-base text-neutral-400 max-w-2xl mx-auto leading-relaxed">
+              From sizzling wagyu to chilled ceviche, explore how food lovers and top chefs elevate their meals with Himalayan salt.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="rounded-3xl border border-rose-500/30 bg-gradient-to-b from-[#180a13] to-[#0c0409] p-6 space-y-3.5 shadow-xl">
+              <span className="inline-block rounded-full bg-rose-500/20 px-3 py-1 text-[11px] font-bold text-rose-300 border border-rose-500/30">
+                Hot Sear &bull; 450&deg;F
+              </span>
+              <h3 className="text-lg font-bold text-white">Prime Ribeye &amp; Wagyu Strips</h3>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                Sear thin strips for 45-60 seconds per side. The dry heat caramelizes exterior marbling while infusing natural minerals, yielding tender, melt-in-your-mouth perfection.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-b from-[#18110a] to-[#0c0804] p-6 space-y-3.5 shadow-xl">
+              <span className="inline-block rounded-full bg-amber-500/20 px-3 py-1 text-[11px] font-bold text-amber-300 border border-amber-500/30">
+                Hot Sear &bull; 450&deg;F
+              </span>
+              <h3 className="text-lg font-bold text-white">Jumbo Sea Scallops &amp; Salmon</h3>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                Sear dry diver scallops for 2 minutes on the salt slab. A golden crust forms with crisp, savory sweetness without ever needing added table salt.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-rose-500/30 bg-gradient-to-b from-[#180a13] to-[#0c0409] p-6 space-y-3.5 shadow-xl">
+              <span className="inline-block rounded-full bg-rose-500/20 px-3 py-1 text-[11px] font-bold text-rose-300 border border-rose-500/30">
+                Sub-Zero Chilled &bull; 0&deg;F
+              </span>
+              <h3 className="text-lg font-bold text-white">Chilled Beef Carpaccio &amp; Sashimi</h3>
+              <p className="text-xs text-neutral-300 leading-relaxed">
+                Arrange paper-thin beef tenderloin or fresh sashimi slices on a frozen slab with olive oil and fresh herbs. The slab gently cures the underside while keeping it chilled.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── 8. Apple Luxury Footer (Pink, Black & Gold) ────────────────────── */}
       <footer className="border-t border-rose-500/20 bg-black py-16 px-6 text-xs text-neutral-400">
         <div className="mx-auto max-w-6xl space-y-10">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-white/10">
@@ -595,11 +523,11 @@ export default async function HomePage() {
                   S
                 </span>
                 <span className="font-bold text-white tracking-tight uppercase text-sm">
-                  Salt<span className="text-rose-400">Craft</span> Academy
+                  Salt<span className="text-rose-400">Craft</span>
                 </span>
               </div>
               <p className="text-xs text-neutral-500">
-                The global hospitality standard for Himalayan salt block culinary mastery and equipment lifecycle management.
+                The premier guide to hand-carved Himalayan salt slabs, searing science, and luxury table-side dining.
               </p>
             </div>
 
@@ -608,18 +536,12 @@ export default async function HomePage() {
                 href="/login"
                 className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition"
               >
-                Sign In
-              </Link>
-              <Link
-                href="/verify"
-                className="rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 px-4 py-2 text-xs font-bold text-white hover:brightness-110 transition shadow-md shadow-rose-900/30"
-              >
-                Verify Certificate
+                Restaurant Portal Sign In
               </Link>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-neutral-400">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-neutral-400">
             <div>
               <h5 className="font-bold text-white mb-2 uppercase text-[10px] tracking-wider text-rose-300">
                 Culinary Science
@@ -627,52 +549,40 @@ export default async function HomePage() {
               <ul className="space-y-1.5 text-[11px]">
                 <li><Link href="#interactive-slab" className="hover:text-white transition">450&deg;F Searing Physics</Link></li>
                 <li><Link href="#minerals" className="hover:text-white transition">84 Trace Minerals</Link></li>
-                <li><Link href="#interactive-slab" className="hover:text-white transition">Sub-Zero Curing Platters</Link></li>
-                <li><Link href="#health-meter" className="hover:text-white transition">40-Cook Health Meter</Link></li>
+                <li><Link href="#interactive-slab" className="hover:text-white transition">Sub-Zero Chilled Service</Link></li>
+                <li><Link href="#health-meter" className="hover:text-white transition">The 40-Cook Journey</Link></li>
               </ul>
             </div>
 
             <div>
               <h5 className="font-bold text-white mb-2 uppercase text-[10px] tracking-wider text-amber-300">
-                Equipment Hub
+                Equipment &amp; Care
               </h5>
               <ul className="space-y-1.5 text-[11px]">
-                <li><span className="text-neutral-300">Cooking Slabs (8x8x2&quot;)</span></li>
-                <li><span className="text-neutral-300">Metal Base Trivet Rings</span></li>
-                <li><span className="text-neutral-300">Cold Steak Platters</span></li>
-                <li><span className="text-neutral-300">Wire Scour Maintenance</span></li>
+                <li><Link href="#golden-rules" className="hover:text-white transition">3-Stage Preheating</Link></li>
+                <li><Link href="#golden-rules" className="hover:text-white transition">Metal Trivet Ring Base</Link></li>
+                <li><Link href="#golden-rules" className="hover:text-white transition">Zero-Soap Cleaning</Link></li>
+                <li><Link href="#golden-rules" className="hover:text-white transition">Finishing Salt Repurposing</Link></li>
               </ul>
             </div>
 
             <div>
               <h5 className="font-bold text-white mb-2 uppercase text-[10px] tracking-wider text-rose-300">
-                Staff Academy
+                Steak Inspiration
               </h5>
               <ul className="space-y-1.5 text-[11px]">
-                <li><Link href="/login" className="hover:text-white transition">Anti-Cheat Video Player</Link></li>
-                <li><Link href="/login" className="hover:text-white transition">90% Passing Standard</Link></li>
-                <li><Link href="/verify" className="hover:text-white transition">Digital Accreditation</Link></li>
-                <li><Link href="/verify" className="hover:text-white transition">Inspector CSV Audits</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h5 className="font-bold text-white mb-2 uppercase text-[10px] tracking-wider text-amber-300">
-                Enterprise Venues
-              </h5>
-              <ul className="space-y-1.5 text-[11px]">
-                <li><Link href="/dashboard/super-admin" className="hover:text-white transition">Super Admin Console</Link></li>
-                <li><Link href="/dashboard/manager" className="hover:text-white transition">General Manager Portal</Link></li>
-                <li><Link href="/dashboard/staff" className="hover:text-white transition">Staff Member Portal</Link></li>
-                <li><Link href="/verify" className="hover:text-white transition">Public Verification</Link></li>
+                <li><Link href="#table-side" className="hover:text-white transition">Prime Ribeye &amp; Wagyu</Link></li>
+                <li><Link href="#table-side" className="hover:text-white transition">Chilled Beef Carpaccio</Link></li>
+                <li><Link href="#table-side" className="hover:text-white transition">Seared Wild Scallops</Link></li>
+                <li><Link href="#interactive-slab" className="hover:text-white transition">Table-Side Sizzle Theater</Link></li>
               </ul>
             </div>
           </div>
 
           <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-neutral-500">
-            <p>&copy; {new Date().getFullYear()} SaltCraft Academy &bull; Multi-Tenant Restaurant LMS SaaS. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} SaltCraft. All rights reserved. Crafted for food lovers and steak connoisseurs.</p>
             <p className="font-mono text-[10px] text-neutral-600">
-              Obsidian &bull; Himalayan Rose &bull; Molten Gold &bull; SF Pro Engine
+              Himalayan Rose Quartz &bull; Molten Gold &bull; Obsidian Black
             </p>
           </div>
         </div>

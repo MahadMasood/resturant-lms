@@ -31,7 +31,7 @@ export default function HealthMeterInteractiveDemo() {
         barColor: "bg-amber-500",
         action: "Thickness Alert & Replacement Order",
         advisory:
-          "Thickness dropped below 1.2 inches. High risk of thermal shock if heated too rapidly. Manager inspection required.",
+          "Thickness dropped below 1.2 inches. Heat extra slowly to preserve the slab for your remaining dinner cooks.",
       };
     }
     if (cooks >= 22) {
@@ -40,9 +40,9 @@ export default function HealthMeterInteractiveDemo() {
         color: "from-sky-600 to-sky-700",
         badge: "bg-sky-950 border-sky-500/40 text-sky-300",
         barColor: "bg-sky-500",
-        action: "Active Dinner Service",
+        action: "Prime Dinner Searing",
         advisory:
-          "Optimal mineral seasoning balance. Micro-fissures present but stable. Always verify metal ring placement.",
+          "Optimal mineral seasoning balance. Beautiful caramelization patina. Always set on your metal ring trivet.",
       };
     }
     return {
@@ -52,7 +52,7 @@ export default function HealthMeterInteractiveDemo() {
       barColor: "bg-emerald-500",
       action: "Peak Sear Performance",
       advisory:
-        "Full 2.0-inch density and maximum heat storage. Water-drop sizzle test holds heat for over 45 minutes table-side.",
+        "Full 2.0-inch density and maximum heat storage. Sizzles steaks at 450°F and holds table heat for over 45 minutes.",
     };
   };
 
@@ -68,10 +68,10 @@ export default function HealthMeterInteractiveDemo() {
           </span>
           <div>
             <h4 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              Interactive 40-Cook Health Meter Simulation
+              The 40-Cook Slab Journey &bull; Interactive Simulator
             </h4>
             <p className="text-xs text-neutral-400">
-              Drag the cook cycle slider to see how kitchen wear triggers automatic manager alerts
+              Drag the slider to see how your slab seasons, ages, and transforms over 40 steak nights
             </p>
           </div>
         </div>
@@ -147,7 +147,7 @@ export default function HealthMeterInteractiveDemo() {
         </div>
 
         <p className="text-xs text-neutral-300 leading-relaxed pt-1">
-          <strong className="text-white block sm:inline mr-1">Kitchen Advisory:</strong>
+          <strong className="text-white block sm:inline mr-1">Slab Care Advisory:</strong>
           {meta.advisory}
         </p>
       </div>
@@ -156,19 +156,19 @@ export default function HealthMeterInteractiveDemo() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
         <div className="rounded-2xl border border-rose-500/20 bg-rose-950/20 p-3.5 space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-rose-300 block">
-            01 &bull; Salt Cooking Plate
+            01 &bull; Salt Cooking Slab
           </span>
           <p className="text-[11px] text-neutral-300">
-            Heat slowly at 200&deg;F &rarr; 300&deg;F &rarr; 450&deg;F. Never quench with water.
+            Heat slowly at 200&deg;F &rarr; 300&deg;F &rarr; 450&deg;F. Sizzles steak at your table with natural minerals.
           </p>
         </div>
 
         <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-3.5 space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
-            02 &bull; Metal Support Ring
+            02 &bull; Metal Trivet Ring
           </span>
           <p className="text-[11px] text-neutral-300">
-            Mandatory base trivet for air convection gap. Prevents flame fracture.
+            Protective base ring allowing convection and protecting dining tables from high searing heat.
           </p>
         </div>
 
@@ -177,7 +177,7 @@ export default function HealthMeterInteractiveDemo() {
             03 &bull; Serving Platter
           </span>
           <p className="text-[11px] text-neutral-300">
-            Chill in walk-in for tabletop beef carpaccio, tuna tartare, and carved steak.
+            Chill in freezer for fresh beef carpaccio, sashimi, and cured charcuterie presentation.
           </p>
         </div>
       </div>

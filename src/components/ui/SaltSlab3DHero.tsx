@@ -227,7 +227,7 @@ export default function SaltSlab3DHero() {
         </div>
 
         <span className="rounded-full bg-rose-500/20 border border-rose-400/30 px-3 py-1 text-[11px] font-bold text-rose-300 whitespace-nowrap">
-          Included in Staff Certification
+          Essential Searing Secret
         </span>
       </div>
     </div>
