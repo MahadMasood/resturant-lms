@@ -19,9 +19,9 @@ import GoldenRules from "@/components/home/GoldenRules";
 import FinalCta from "@/components/home/FinalCta";
 
 export const metadata: Metadata = {
-  title: "SaltCraft — Himalayan Salt Slabs",
+  title: "Himalayan Reserves — Hand-Carved Himalayan Salt Slabs for Cooking",
   description:
-    "Hand-carved Himalayan salt slabs that sear steak at 450°F, chill sashimi at 0°F and season every bite with 84 trace minerals.",
+    "Cook, sear and serve on hand-carved Himalayan salt slabs. Heat to 450°F for steak or chill to 0°F for sashimi, with 84 trace minerals in every bite.",
 };
 
 const NAV_LINKS = [
