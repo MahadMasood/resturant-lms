@@ -6,6 +6,7 @@ import InviteStaffModal from "@/components/ui/InviteStaffModal";
 import StaffProgressTable from "@/components/ui/StaffProgressTable";
 import StatsCard from "@/components/ui/StatsCard";
 import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
+import SaltEquipmentManager from "@/components/ui/SaltEquipmentManager";
 
 interface ModuleItem {
   id: string;
@@ -118,6 +119,16 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      id: "equipment",
+      label: "Salt Slabs & Equipment",
+      description: "Cooking plates 40-cook health meter, metal rings & serving platters",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
         </svg>
       ),
     },
@@ -238,6 +249,32 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
                 }
                 accent="text-amber-400"
               />
+            </div>
+
+            {/* Himalayan Salt Cooking Slab & Equipment Quick Widget */}
+            <div className="rounded-3xl border border-rose-500/30 bg-gradient-to-r from-rose-950/40 via-neutral-900 to-neutral-900 p-5 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 rounded-full bg-rose-950/60 border border-rose-500/30 px-3 py-0.5 text-[11px] font-semibold text-rose-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
+                  Salt Slab &amp; Equipment Lifecycle System
+                </div>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  Himalayan Salt Cooking Slabs &bull; 40-Cook Health Meter Active
+                </h3>
+                <p className="text-xs text-neutral-400 max-w-2xl">
+                  Log table sears, monitor the 40-cook lifespan depletion threshold, and manage metal ring base trivets and cold steak serving boards.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setActiveTab("equipment")}
+                className="inline-flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-xs font-bold text-white transition shadow-lg shadow-rose-900/30 self-start md:self-auto shrink-0"
+              >
+                <span>Manage Salt Inventory</span>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
 
             {/* Quick Feature Jump Cards */}
@@ -573,6 +610,15 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 6: SALT SLABS & EQUIPMENT (40-COOK HEALTH METER)     */}
+        {/* ======================================================== */}
+        {activeTab === "equipment" && (
+          <div className="animate-in fade-in duration-200">
+            <SaltEquipmentManager tenantName={tenantName} />
           </div>
         )}
       </div>

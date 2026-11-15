@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:restaurant": "node scripts/seed-restaurant.js",
+    "seed:equipment": "node scripts/seed-equipment.js",
     "postinstall": "prisma generate"
   },
   "prisma": {

@@ -15,6 +15,26 @@ interface TenantUser {
   quizAttemptsCount?: number;
 }
 
+interface EquipmentSummary {
+  totalCookingPlates: number;
+  averagePlateHealth: number;
+  totalMetalRings: number;
+  totalServingPlates: number;
+  nearDepletedCount: number;
+}
+
+interface EquipmentItemData {
+  id: string;
+  name: string;
+  type: "COOKING_PLATE" | "METAL_RING" | "SERVING_PLATE";
+  cooksCount: number;
+  maxCooks: number;
+  quantity: number;
+  status: "ACTIVE" | "MAINTENANCE" | "RETIRED";
+  notes: string | null;
+  updatedAt: string;
+}
+
 interface TenantData {
   id: string;
   name: string;
@@ -22,6 +42,8 @@ interface TenantData {
   userCount: number;
   moduleCount: number;
   users?: TenantUser[];
+  equipment?: EquipmentItemData[];
+  equipmentSummary?: EquipmentSummary;
 }
 
 interface PlatformUser {
@@ -414,7 +436,14 @@ export default function SuperAdminView() {
                               </td>
 
                               <td className="px-6 py-4 text-xs font-mono text-neutral-300">
-                                {t.moduleCount} Courses
+                                <div>
+                                  <span>{t.moduleCount} Courses</span>
+                                  {t.equipmentSummary && (
+                                    <span className="block text-[10px] text-rose-400 font-sans mt-0.5 font-medium">
+                                      {t.equipmentSummary.totalCookingPlates} Slabs &bull; {t.equipmentSummary.averagePlateHealth}% Health
+                                    </span>
+                                  )}
+                                </div>
                               </td>
 
                               <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -522,6 +551,148 @@ export default function SuperAdminView() {
                                         ))}
                                       </div>
                                     )}
+
+                                    {/* Salt Slabs & Equipment Section (Restaurant-Wise) */}
+                                    <div className="pt-5 border-t border-neutral-800 space-y-4">
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-rose-600 text-white text-xs font-bold">
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                                            </svg>
+                                          </span>
+                                          <div>
+                                            <h4 className="text-sm font-bold text-white tracking-tight">
+                                              {t.name} &mdash; Salt Slabs &amp; Equipment Inventory
+                                            </h4>
+                                            <p className="text-[11px] text-neutral-400">
+                                              Cooking slab 40-cook health meters, metal burner base rings, and cold steak serving plates.
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        {/* Equipment KPI summary pills */}
+                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                          <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-neutral-300">
+                                            <strong className="text-white font-mono">{t.equipmentSummary?.totalCookingPlates ?? 0}</strong> Cooking Slabs (Avg Health: <strong className="text-emerald-400 font-mono">{t.equipmentSummary?.averagePlateHealth ?? 100}%</strong>)
+                                          </span>
+                                          <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-neutral-300">
+                                            <strong className="text-white font-mono">{t.equipmentSummary?.totalMetalRings ?? 0}</strong> Metal Rings
+                                          </span>
+                                          <span className="rounded-lg border border-neutral-800 bg-neutral-950 px-2.5 py-1 text-neutral-300">
+                                            <strong className="text-white font-mono">{t.equipmentSummary?.totalServingPlates ?? 0}</strong> Serving Plates
+                                          </span>
+                                          {(t.equipmentSummary?.nearDepletedCount ?? 0) > 0 && (
+                                            <span className="rounded-lg border border-amber-500/30 bg-amber-950/60 px-2.5 py-1 text-amber-300 font-semibold animate-pulse">
+                                              {t.equipmentSummary?.nearDepletedCount} Slabs Near 40 Cooks
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Equipment Grid */}
+                                      {(!t.equipment || t.equipment.length === 0) ? (
+                                        <div className="p-6 text-center text-xs text-neutral-500 bg-neutral-950 rounded-xl border border-neutral-800/80">
+                                          No equipment or salt slabs registered for this restaurant yet.
+                                        </div>
+                                      ) : (
+                                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                          {t.equipment.map((eq) => {
+                                            const isCookingPlate = eq.type === "COOKING_PLATE";
+                                            const maxCooks = eq.maxCooks || 40;
+                                            const percentage = Math.max(0, Math.round(((maxCooks - eq.cooksCount) / maxCooks) * 100));
+                                            const usedPercentage = Math.min(100, Math.round((eq.cooksCount / maxCooks) * 100));
+                                            const isDepleted = eq.cooksCount >= maxCooks;
+                                            const isCritical = eq.cooksCount >= 36;
+
+                                            return (
+                                              <div
+                                                key={eq.id}
+                                                className={`rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-2.5 transition hover:border-neutral-700 ${
+                                                  eq.status === "RETIRED" ? "opacity-60" : ""
+                                                }`}
+                                              >
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div>
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                      <span
+                                                        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold border uppercase tracking-wider ${
+                                                          eq.type === "COOKING_PLATE"
+                                                            ? "bg-rose-950/80 border-rose-500/30 text-rose-300"
+                                                            : eq.type === "METAL_RING"
+                                                            ? "bg-blue-950/80 border-blue-500/30 text-blue-300"
+                                                            : "bg-emerald-950/80 border-emerald-500/30 text-emerald-300"
+                                                        }`}
+                                                      >
+                                                        {eq.type === "COOKING_PLATE"
+                                                          ? "Cooking Slab"
+                                                          : eq.type === "METAL_RING"
+                                                          ? "Metal Ring"
+                                                          : "Serving Platter"}
+                                                      </span>
+
+                                                      <span className="rounded-md bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 text-[9px] font-semibold text-neutral-400">
+                                                        {eq.status}
+                                                      </span>
+                                                    </div>
+
+                                                    <h5 className="text-xs font-bold text-white leading-tight">
+                                                      {eq.name}
+                                                    </h5>
+                                                  </div>
+
+                                                  {!isCookingPlate && (
+                                                    <span className="rounded-lg bg-neutral-800 border border-neutral-700 px-2 py-0.5 text-xs font-bold text-white font-mono">
+                                                      Qty: {eq.quantity}
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                {/* 40-Cook Health Meter Bar for Cooking Slabs */}
+                                                {isCookingPlate && (
+                                                  <div className="space-y-1.5 pt-1 border-t border-neutral-800/80">
+                                                    <div className="flex items-center justify-between text-[11px]">
+                                                      <span className="text-neutral-400 font-medium">Health Meter:</span>
+                                                      <span className={`font-mono font-bold ${
+                                                        isDepleted ? "text-rose-400" : isCritical ? "text-amber-400" : "text-emerald-400"
+                                                      }`}>
+                                                        {eq.cooksCount} / {maxCooks} Cooks ({percentage}%)
+                                                      </span>
+                                                    </div>
+
+                                                    <div className="h-2 w-full rounded-full bg-neutral-800 overflow-hidden">
+                                                      <div
+                                                        className={`h-full rounded-full transition-all duration-300 ${
+                                                          isDepleted
+                                                            ? "bg-rose-500"
+                                                            : isCritical
+                                                            ? "bg-amber-500"
+                                                            : "bg-emerald-500"
+                                                        }`}
+                                                        style={{ width: `${usedPercentage}%` }}
+                                                      />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between text-[9px] text-neutral-500">
+                                                      <span>
+                                                        {isDepleted ? "Lifespan Reached" : isCritical ? "Critical Wear" : "Prime Condition"}
+                                                      </span>
+                                                      <span>Target: 40 Cooks</span>
+                                                    </div>
+                                                  </div>
+                                                )}
+
+                                                {eq.notes && (
+                                                  <p className="text-[10px] text-neutral-400 line-clamp-2 pt-1 border-t border-neutral-800/60">
+                                                    {eq.notes}
+                                                  </p>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                               </tr>

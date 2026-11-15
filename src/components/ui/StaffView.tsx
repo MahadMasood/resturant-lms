@@ -132,6 +132,16 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
         </svg>
       ),
     },
+    {
+      id: "salt-guide",
+      label: "Salt Slab Cooking Guide",
+      description: "Searing temperatures, metal ring safety & steak presentation",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -453,6 +463,154 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 4: SALT SLAB COOKING & STEAK PRESENTATION GUIDE      */}
+        {/* ======================================================== */}
+        {activeTab === "salt-guide" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-neutral-900 border border-neutral-800 px-3 py-1 text-xs text-neutral-400 mb-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
+                Kitchen &amp; Service Standard Operating Procedure
+              </div>
+              <h2 className="text-2xl font-bold text-white tracking-tight">
+                Himalayan Salt Slab Searing &amp; Steak Presentation Guide
+              </h2>
+              <p className="mt-1 text-sm text-neutral-400 max-w-3xl">
+                Master the essential rules for gradual heating, metal ring placement, rapid high-temperature searing, and cold presentation slabs.
+              </p>
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              {/* Card 1 */}
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-6 space-y-3.5 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-950/70 border border-rose-500/30 text-rose-400 font-bold text-sm">
+                    01
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Three-Stage Gradual Pre-Heating</h3>
+                    <p className="text-xs text-neutral-400">Never expose cold salt slabs to immediate high heat</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs text-neutral-300">
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between font-bold text-neutral-200">
+                      <span>Stage 1: Low Heat (200&deg;F)</span>
+                      <span className="text-rose-400 font-mono">15 Minutes</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">Expels residual kitchen moisture trapped within the mineral matrix.</p>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between font-bold text-neutral-200">
+                      <span>Stage 2: Medium Heat (300&deg;F)</span>
+                      <span className="text-rose-400 font-mono">15 Minutes</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">Uniformly distributes core temperature throughout the slab thickness.</p>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3 space-y-1.5">
+                    <div className="flex items-center justify-between font-bold text-neutral-200">
+                      <span>Stage 3: High Sear (450&deg;F+)</span>
+                      <span className="text-rose-400 font-mono">10-15 Minutes</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">Performs the water-sizzle test: a drop of water must vaporize instantly.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2 */}
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-6 space-y-3.5 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-950/70 border border-blue-500/30 text-blue-400 font-bold text-sm">
+                    02
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Metal Base Ring Placement &amp; Safety</h3>
+                    <p className="text-xs text-neutral-400">Ensures uniform convection and table-side insulation</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 text-xs text-neutral-300">
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-blue-400 block">Burner Ring Convection</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Always place the cooking slab squarely atop the designated metal ring. The ring creates an air gap that diffuses direct flame spikes and eliminates hot spot fractures.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-blue-400 block">Table Trivet Presentation</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      When carrying seared slabs to guest dining tables, transfer the slab onto the insulated stainless service ring trivet using high-heat silicone mitts.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3 */}
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-6 space-y-3.5 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 font-bold text-sm">
+                    03
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Steak Searing &amp; Oil Rules</h3>
+                    <p className="text-xs text-neutral-400">Oil the meat cut directly &mdash; never oil the salt slab</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 text-xs text-neutral-300">
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-emerald-400 block">Steak Prep (Ribeye, Strip, Tomahawk)</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Lightly brush the cut with high-smoke-point oil (avocado or grapeseed). Never salt the steak beforehand &mdash; the slab naturally cures and seasons the crust during contact.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-emerald-400 block">Sear Duration</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Sear for 2-3 minutes per side for medium-rare crust. Rapid searing prevents over-salting while locking in succulent juices.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4 */}
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/80 p-6 space-y-3.5 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-950/70 border border-amber-500/30 text-amber-400 font-bold text-sm">
+                    04
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-white">40-Cook Health Meter &amp; Care</h3>
+                    <p className="text-xs text-neutral-400">Zero detergent &bull; Log every cook with your shift manager</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 text-xs text-neutral-300">
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-amber-400 block">Cleaning Protocol</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Wait until the slab cools completely to ambient room temperature. Use a damp cloth and metal scraper to remove charred bits. NEVER use soap or submerge in water.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 space-y-1">
+                    <span className="font-bold text-amber-400 block">40-Cook Health Meter Awareness</span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Each cooking plate has a strict 40-cook lifespan tracked in the Manager Hub. If a slab thins below 1 inch or develops deep fissures, alert your manager to retire it.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

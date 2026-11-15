@@ -29,27 +29,70 @@ export async function GET() {
         },
         orderBy: [{ role: "asc" }, { name: "asc" }],
       },
+      equipment: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          cooksCount: true,
+          maxCooks: true,
+          quantity: true,
+          status: true,
+          notes: true,
+          updatedAt: true,
+        },
+        orderBy: [{ type: "asc" }, { cooksCount: "desc" }],
+      },
     },
     orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(
-    tenants.map((t: any) => ({
-      id: t.id,
-      name: t.name,
-      createdAt: t.createdAt,
-      userCount: t._count.users,
-      moduleCount: t._count.modules,
-      users: t.users.map((u: any) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        createdAt: u.createdAt,
-        certificatesCount: u._count?.certificates ?? 0,
-        quizAttemptsCount: u._count?.quizAttempts ?? 0,
-      })),
-    }))
+    tenants.map((t: any) => {
+      const activeCookingPlates = t.equipment?.filter((e: any) => e.type === "COOKING_PLATE" && e.status !== "RETIRED") ?? [];
+      const totalCookingPlates = activeCookingPlates.reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
+      const averagePlateHealth = activeCookingPlates.length > 0
+        ? Math.round(
+            activeCookingPlates.reduce((sum: number, p: any) => {
+              const h = Math.max(0, Math.round(((p.maxCooks - p.cooksCount) / p.maxCooks) * 100));
+              return sum + h;
+            }, 0) / activeCookingPlates.length
+          )
+        : 100;
+
+      const totalMetalRings = (t.equipment?.filter((e: any) => e.type === "METAL_RING") ?? [])
+        .reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
+
+      const totalServingPlates = (t.equipment?.filter((e: any) => e.type === "SERVING_PLATE") ?? [])
+        .reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
+
+      const nearDepletedCount = (t.equipment?.filter((e: any) => e.type === "COOKING_PLATE" && e.cooksCount >= 36) ?? []).length;
+
+      return {
+        id: t.id,
+        name: t.name,
+        createdAt: t.createdAt,
+        userCount: t._count.users,
+        moduleCount: t._count.modules,
+        users: t.users.map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          createdAt: u.createdAt,
+          certificatesCount: u._count?.certificates ?? 0,
+          quizAttemptsCount: u._count?.quizAttempts ?? 0,
+        })),
+        equipment: t.equipment ?? [],
+        equipmentSummary: {
+          totalCookingPlates,
+          averagePlateHealth,
+          totalMetalRings,
+          totalServingPlates,
+          nearDepletedCount,
+        },
+      };
+    })
   );
 }
 

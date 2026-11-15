@@ -13,8 +13,9 @@ model Tenant {
   name      String
   createdAt DateTime @default(now())
 
-  users   User[]
-  modules Module[]
+  users     User[]
+  modules   Module[]
+  equipment EquipmentItem[]
 }
 
 model User {
@@ -107,4 +108,32 @@ model Certificate {
   module Module @relation(fields: [moduleId], references: [id])
 
   @@unique([userId, moduleId])
+}
+
+enum EquipmentType {
+  COOKING_PLATE
+  METAL_RING
+  SERVING_PLATE
+}
+
+enum EquipmentStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+model EquipmentItem {
+  id         String          @id @default(cuid())
+  tenantId   String
+  name       String
+  type       EquipmentType
+  cooksCount Int             @default(0)
+  maxCooks   Int             @default(40)
+  quantity   Int             @default(1)
+  status     EquipmentStatus @default(ACTIVE)
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
