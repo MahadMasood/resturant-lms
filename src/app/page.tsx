@@ -8,8 +8,6 @@ import ScrollReveal from "@/components/ui/ScrollReveal";
 import SaltSlab3DHero from "@/components/ui/SaltSlab3DHero";
 import HealthMeterInteractiveDemo from "@/components/ui/HealthMeterInteractiveDemo";
 
-export const dynamic = "force-dynamic";
-
 export default async function HomePage() {
   const session = await auth();
   const role = (session?.user as { role?: UserRole } | undefined)?.role;
