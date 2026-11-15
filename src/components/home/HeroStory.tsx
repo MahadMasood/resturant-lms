@@ -91,7 +91,7 @@ export default function HeroStory() {
   };
 
   return (
-    <section id="story" ref={ref} className="relative h-[700vh]" aria-label="The SaltCraft slab, chapter by chapter">
+    <section id="story" ref={ref} className="relative h-[700vh]" aria-label="The Himalayan Reserves slab, chapter by chapter">
       <div className="sticky top-0 h-svh w-full overflow-hidden">
         <motion.div aria-hidden className="absolute inset-0" style={{ backgroundColor: bg }} />
         <motion.div aria-hidden className="absolute inset-0" style={{ background: glowBg }} />
@@ -159,7 +159,7 @@ export default function HeroStory() {
               transition={{ duration: 0.9, ease: EASE, delay: 0.1 }}
               className="text-[11px] font-medium uppercase tracking-[0.3em] text-rose-200/80 sm:text-xs"
             >
-              SaltCraft &middot; Himalayan Salt Slab
+              Himalayan Reserves &middot; Himalayan Salt Slab
             </motion.p>
             <h1 className="mt-4 text-[clamp(3rem,9.5vw,7rem)] font-semibold leading-[0.92] tracking-[-0.045em] text-white">
               <RevealWords text="Ancient salt." delay={0.2} />

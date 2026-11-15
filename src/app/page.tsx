@@ -125,7 +125,7 @@ export default function HomePage() {
           </div>
           <div className="flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
             <p>
-              &copy; <CopyrightYear /> SaltCraft. Crafted for food lovers and steak connoisseurs.
+              &copy; <CopyrightYear /> Himalayan Reserves. Crafted for food lovers and steak connoisseurs.
             </p>
             <Link href="/login" className="group link-underline inline-flex items-center gap-1 text-neutral-400 transition-colors hover:text-white">
               Restaurant portal sign in
