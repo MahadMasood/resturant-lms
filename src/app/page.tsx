@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { connection } from "next/server";
 import { auth } from "@/auth";
@@ -40,14 +41,18 @@ export default function HomePage() {
       {/* ─── Navigation ─────────────────────────────────────────────────── */}
       <header className="fixed inset-x-0 top-0 z-50 h-11 border-b border-white/10 bg-black/60 backdrop-blur-xl backdrop-saturate-150">
         <nav className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="group flex items-center gap-2 text-white">
-            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-linear-to-br from-rose-400 via-rose-500 to-amber-400 transition-[transform,box-shadow] duration-300 ease-out group-hover:-rotate-12 group-hover:scale-110 group-hover:shadow-[0_0_18px_rgba(251,146,60,0.7)]">
-              <svg className="h-3.5 w-3.5 fill-current" viewBox="0 0 24 24" aria-hidden>
-                <path d="M12 2L2 7l10 5 10-5-10-5zm0 18l-8-4v-5l8 4 8-4v5l-8 4z" />
-              </svg>
-            </span>
-            <span className="text-sm font-semibold tracking-tight">
-              Salt<span className="text-rose-300">Craft</span>
+          <Link href="/" aria-label="The Himalayan Reserve, home" className="group flex items-center gap-3">
+            <Image
+              src="/logo-mark.png"
+              alt=""
+              width={438}
+              height={148}
+              priority
+              className="h-6 w-auto transition-[transform,filter] duration-500 ease-out group-hover:scale-105 group-hover:drop-shadow-[0_0_10px_rgba(232,141,130,0.55)]"
+            />
+            <span aria-hidden className="hidden h-4 w-px bg-white/20 sm:block" />
+            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-300 transition-colors duration-300 group-hover:text-white sm:block">
+              The Himalayan Reserve
             </span>
           </Link>
 
