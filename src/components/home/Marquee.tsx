@@ -19,12 +19,12 @@ export default function Marquee() {
       aria-hidden
       className="relative overflow-hidden border-y border-white/10 bg-black py-10 text-[clamp(3rem,10vw,9rem)] font-semibold leading-[1.05] tracking-[-0.045em] sm:py-14"
     >
-      <motion.div style={{ x: forward }} className="whitespace-nowrap text-transparent [-webkit-text-stroke:1px_rgba(255,255,255,0.28)]">
+      <motion.div style={{ x: forward }} className="w-max whitespace-nowrap text-transparent [-webkit-text-stroke:1px_rgba(255,255,255,0.28)]">
         {ROW_ONE.repeat(4)}
       </motion.div>
       <motion.div
         style={{ x: backward }}
-        className="whitespace-nowrap bg-linear-to-r from-rose-300 via-amber-200 to-orange-400 bg-clip-text text-transparent"
+        className="w-max whitespace-nowrap bg-linear-to-r from-rose-300 via-amber-200 to-orange-400 bg-clip-text text-transparent"
       >
         {ROW_TWO.repeat(4)}
       </motion.div>
