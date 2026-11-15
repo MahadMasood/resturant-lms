@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { use, useEffect, useMemo, useRef } from "react";
 import type { Ref, RefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { paintBump, paintFrost, paintGlow, paintSalt, rng } from "../saltPaint";
+import { paintSlabCanvases, rng } from "../saltPaint";
 
 // ─── Timeline helpers ─────────────────────────────────────────────────────
 export type Keys = ReadonlyArray<readonly [number, number]>;
@@ -40,21 +40,26 @@ interface SlabTextures {
   glow: THREE.CanvasTexture;
 }
 
-let textures: SlabTextures | null = null;
+let textures: Promise<SlabTextures> | null = null;
 
-export function getSlabTextures(): SlabTextures {
-  if (textures) return textures;
-  const salt = new THREE.CanvasTexture(paintSalt());
-  salt.colorSpace = THREE.SRGBColorSpace;
-  salt.wrapS = salt.wrapT = THREE.RepeatWrapping;
-  salt.anisotropy = 8;
-  const bump = new THREE.CanvasTexture(paintBump());
-  bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
-  const frost = new THREE.CanvasTexture(paintFrost());
-  frost.colorSpace = THREE.SRGBColorSpace;
-  const glow = new THREE.CanvasTexture(paintGlow());
-  textures = { salt, bump, frost, glow };
+function loadSlabTextures(): Promise<SlabTextures> {
+  textures ??= paintSlabCanvases().then((c) => {
+    const salt = new THREE.CanvasTexture(c.salt);
+    salt.colorSpace = THREE.SRGBColorSpace;
+    salt.wrapS = salt.wrapT = THREE.RepeatWrapping;
+    salt.anisotropy = 8;
+    const bump = new THREE.CanvasTexture(c.bump);
+    bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+    const frost = new THREE.CanvasTexture(c.frost);
+    frost.colorSpace = THREE.SRGBColorSpace;
+    return { salt, bump, frost, glow: new THREE.CanvasTexture(c.glow) };
+  });
   return textures;
+}
+
+/** The shared slab textures; suspends (wrap in <Suspense>) until they're painted. */
+export function useSlabTextures(): SlabTextures {
+  return use(loadSlabTextures());
 }
 
 // ─── The slab: a rectangular block that splits into four mineral strata ──
@@ -124,6 +129,30 @@ function roundedSlabGeometry(w: number, h: number, d: number, corner: number, be
   return geometry;
 }
 
+let slabGeometries: { body: THREE.BufferGeometry; layer: THREE.BufferGeometry; frost: THREE.BufferGeometry } | null = null;
+
+/** Built once and shared by every slab on the page (they're identical). */
+function getSlabGeometries() {
+  slabGeometries ??= {
+    body: roundedSlabGeometry(SLAB_W, SLAB_H, SLAB_D, SLAB_CORNER, 0.08),
+    layer: roundedSlabGeometry(SLAB_W, LAYER_H, SLAB_D, SLAB_CORNER, 0.03),
+    frost: roundedSlabGeometry(SLAB_W + 0.03, SLAB_H + 0.03, SLAB_D + 0.03, SLAB_CORNER + 0.015, 0.09),
+  };
+  return slabGeometries;
+}
+
+/**
+ * Renderer setup shared by every canvas. Shader error checks read back driver
+ * logs on each shader's first use, which stalls; three.js recommends turning
+ * them off in production, so they stay on in development only.
+ */
+export function tuneRenderer({ gl }: { gl: THREE.WebGLRenderer }) {
+  gl.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
+  // Ask the GPU its anisotropy limit now, while it's idle: three.js caches the
+  // answer, and asking later (on the first texture upload) waits for all queued GPU work.
+  gl.capabilities.getMaxAnisotropy();
+}
+
 /** Local y of stratum `i` (0 = top) for a given separation. */
 export const layerY = (i: number, gap: number) => ((SLAB_LAYERS - 1) / 2 - i) * (LAYER_H + gap);
 
@@ -167,15 +196,8 @@ function saltMaterial(tex: SlabTextures, tint: THREE.Color, i: number) {
 }
 
 export function SaltSlab({ state }: { state: RefObject<SlabState> }) {
-  const tex = getSlabTextures();
-  const geometries = useMemo(
-    () => ({
-      body: roundedSlabGeometry(SLAB_W, SLAB_H, SLAB_D, SLAB_CORNER, 0.08),
-      layer: roundedSlabGeometry(SLAB_W, LAYER_H, SLAB_D, SLAB_CORNER, 0.03),
-      frost: roundedSlabGeometry(SLAB_W + 0.03, SLAB_H + 0.03, SLAB_D + 0.03, SLAB_CORNER + 0.015, 0.09),
-    }),
-    []
-  );
+  const tex = useSlabTextures();
+  const geometries = getSlabGeometries();
   const materials = useMemo(() => TINTS.map((tint, i) => saltMaterial(tex, tint, i)), [tex]);
   const frostMaterial = useMemo(
     () =>
@@ -191,14 +213,13 @@ export function SaltSlab({ state }: { state: RefObject<SlabState> }) {
 
   useEffect(
     () => () => {
-      Object.values(geometries).forEach((g) => g.dispose());
       materials.forEach((m) => {
         m.map?.dispose();
         m.dispose();
       });
       frostMaterial.dispose();
     },
-    [geometries, materials, frostMaterial]
+    [materials, frostMaterial]
   );
 
   const root = useRef<THREE.Group>(null);
@@ -338,7 +359,7 @@ export function GlowDisc({
   y: number;
   strength?: number;
 }) {
-  const tex = getSlabTextures();
+  const tex = useSlabTextures();
   const material = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
@@ -370,10 +391,62 @@ export function GlowDisc({
 }
 
 // ─── Point-sprite particles: embers rise, snow falls, dust drifts ─────────
+// Animated entirely in the vertex shader, so there's no per-frame JavaScript
+// or buffer upload; the motion maths matches the original CPU version.
+const PARTICLE_MODES = { rise: 0, fall: 1, drift: 2 } as const;
+
+const PARTICLE_VERTEX = /* glsl */ `
+  attribute vec4 seed; // x, z, phase, speed
+  uniform float uTime;
+  uniform float uHeight;
+  uniform float uBase;
+  uniform float uSize;
+  uniform float uScale;
+  varying float vFade;
+
+  void main() {
+    float ph = seed.z;
+    float life = fract(ph + uTime * seed.w);
+    vec3 p = vec3(seed.x, 0.0, seed.y);
+    #if MODE == 0
+      p.y = uBase + life * uHeight;
+      p.x += sin(uTime * 1.7 + ph * 20.0) * 0.14 * life;
+      p.z += cos(uTime * 1.3 + ph * 14.0) * 0.14 * life;
+      vFade = sin(life * 3.14159265);
+    #elif MODE == 1
+      p.y = uBase + uHeight - life * uHeight;
+      p.x += sin(uTime * 0.6 + ph * 30.0) * 0.25;
+      vFade = sin(life * 3.14159265);
+    #else
+      p.y = uBase + fract(ph * 7.3) * uHeight + sin(uTime * 0.5 + ph * 40.0) * 0.25;
+      p.x += sin(uTime * 0.3 + ph * 9.0) * 0.3;
+      p.z += cos(uTime * 0.25 + ph * 5.0) * 0.3;
+      vFade = 0.5 + 0.5 * sin(uTime * 2.0 + ph * 50.0);
+    #endif
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_PointSize = uSize * (uScale / -mv.z);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const PARTICLE_FRAGMENT = /* glsl */ `
+  uniform sampler2D uMap;
+  uniform vec3 uColor;
+  uniform float uLevel;
+  varying float vFade;
+
+  void main() {
+    float a = texture2D(uMap, gl_PointCoord).a;
+    gl_FragColor = vec4(uColor * vFade * uLevel, a);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
 interface ParticleProps {
   count: number;
   level: RefObject<number>;
-  mode: "rise" | "fall" | "drift";
+  mode: keyof typeof PARTICLE_MODES;
   color: string;
   size: number;
   spread: number;
@@ -384,8 +457,8 @@ interface ParticleProps {
 }
 
 export function Particles({ count, level, mode, color, size, spread, height, base = 0, seed = 1, speed = 1 }: ParticleProps) {
-  const tex = getSlabTextures();
-  const { geometry, seeds } = useMemo(() => {
+  const tex = useSlabTextures();
+  const geometry = useMemo(() => {
     const r = rng(seed);
     const seeds = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
@@ -393,25 +466,35 @@ export function Particles({ count, level, mode, color, size, spread, height, bas
       const d = Math.sqrt(r()) * spread;
       seeds.set([Math.cos(a) * d, Math.sin(a) * d, r(), 0.12 + r() * 0.3], i * 4);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-    return { geometry, seeds };
+    const g = new THREE.BufferGeometry();
+    // three needs a position attribute to know the draw count; the shader ignores it.
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    g.setAttribute("seed", new THREE.BufferAttribute(seeds, 4));
+    return g;
   }, [count, spread, seed]);
 
   const material = useMemo(
     () =>
-      new THREE.PointsMaterial({
-        size,
-        map: tex.glow,
-        vertexColors: true,
+      new THREE.ShaderMaterial({
+        defines: { MODE: PARTICLE_MODES[mode] },
+        uniforms: {
+          uTime: { value: 0 },
+          uHeight: { value: height },
+          uBase: { value: base },
+          uSize: { value: size },
+          uScale: { value: 1 },
+          uLevel: { value: 0 },
+          uColor: { value: new THREE.Color(color) },
+          uMap: { value: tex.glow },
+        },
+        vertexShader: PARTICLE_VERTEX,
+        fragmentShader: PARTICLE_FRAGMENT,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
-    [size, tex]
+    [mode, height, base, size, color, tex]
   );
-  const tint = useMemo(() => new THREE.Color(color), [color]);
 
   useEffect(
     () => () => {
@@ -423,51 +506,18 @@ export function Particles({ count, level, mode, color, size, spread, height, bas
 
   const points = useRef<THREE.Points>(null);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, size: view, viewport }) => {
     const pts = points.current;
     if (!pts) return;
     const lv = level.current;
     pts.visible = lv > 0.01;
     if (!pts.visible) return;
-    const t = clock.elapsedTime * speed;
-    const { position, color: colour } = pts.geometry.attributes;
-    const pos = position.array as Float32Array;
-    const col = colour.array as Float32Array;
-    for (let i = 0; i < count; i++) {
-      const sx = seeds[i * 4];
-      const sz = seeds[i * 4 + 1];
-      const ph = seeds[i * 4 + 2];
-      const sp = seeds[i * 4 + 3];
-      const life = (ph + t * sp) % 1;
-      let x = sx;
-      let y: number;
-      let z = sz;
-      let fade: number;
-      if (mode === "rise") {
-        y = base + life * height;
-        x += Math.sin(t * 1.7 + ph * 20) * 0.14 * life;
-        z += Math.cos(t * 1.3 + ph * 14) * 0.14 * life;
-        fade = Math.sin(life * Math.PI);
-      } else if (mode === "fall") {
-        y = base + height - life * height;
-        x += Math.sin(t * 0.6 + ph * 30) * 0.25;
-        fade = Math.sin(life * Math.PI);
-      } else {
-        y = base + ((ph * 7.3) % 1) * height + Math.sin(t * 0.5 + ph * 40) * 0.25;
-        x += Math.sin(t * 0.3 + ph * 9) * 0.3;
-        z += Math.cos(t * 0.25 + ph * 5) * 0.3;
-        fade = 0.5 + 0.5 * Math.sin(t * 2 + ph * 50);
-      }
-      const f = fade * lv;
-      pos[i * 3] = x;
-      pos[i * 3 + 1] = y;
-      pos[i * 3 + 2] = z;
-      col[i * 3] = tint.r * f;
-      col[i * 3 + 1] = tint.g * f;
-      col[i * 3 + 2] = tint.b * f;
-    }
-    position.needsUpdate = true;
-    colour.needsUpdate = true;
+    const u = (pts.material as THREE.ShaderMaterial).uniforms;
+    u.uTime.value = clock.elapsedTime * speed;
+    u.uLevel.value = lv;
+    // Same sizing as PointsMaterial: size × pixel ratio × (half the view height / depth).
+    u.uSize.value = size * viewport.dpr;
+    u.uScale.value = view.height * 0.5;
   });
 
   return <points ref={points} geometry={geometry} material={material} frustumCulled={false} />;
@@ -475,7 +525,7 @@ export function Particles({ count, level, mode, color, size, spread, height, bas
 
 // ─── Shatter: the spent slab bursts into finishing-salt crystals ──────────
 export function CrystalBurst({ amount, count = 130, originY = 0 }: { amount: RefObject<number>; count?: number; originY?: number }) {
-  const tex = getSlabTextures();
+  const tex = useSlabTextures();
   const geometry = useMemo(() => new THREE.OctahedronGeometry(0.1, 0), []);
   const material = useMemo(
     () =>
@@ -543,22 +593,115 @@ export function CrystalBurst({ amount, count = 130, originY = 0 }: { amount: Ref
   return <instancedMesh ref={mesh} args={[geometry, material, count]} frustumCulled={false} />;
 }
 
-// ─── Studio lighting: soft-box reflections plus rose and gold rim lights ──
-export function StudioLights({ envIntensity = 0.65 }: { envIntensity?: number }) {
+// ─── Warm-up: no shader compiles or texture uploads mid-scroll ────────────
+/**
+ * Uploads every texture and compiles every material in the scene (hidden
+ * effects included) before the canvas starts rendering, then calls `onReady`.
+ * Mount it last inside <Canvas> so the lights and environment already exist.
+ */
+export function WarmUp({ onReady }: { onReady: () => void }) {
   const get = useThree((s) => s.get);
+  const done = useRef(onReady);
+
+  useEffect(() => {
+    done.current = onReady;
+  }, [onReady]);
+
+  useEffect(() => {
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      done.current();
+    };
+    const { gl, scene, camera } = get();
+    const textures = new Set<THREE.Texture>();
+    scene.traverse((object) => {
+      const material = (object as THREE.Mesh).material;
+      if (!material) return;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        for (const value of Object.values(m)) if (value instanceof THREE.Texture) textures.add(value);
+        const uniforms = (m as THREE.ShaderMaterial).uniforms;
+        if (uniforms) for (const u of Object.values(uniforms)) if (u.value instanceof THREE.Texture) textures.add(u.value);
+      }
+    });
+    textures.forEach((t) => gl.initTexture(t));
+    gl.compileAsync(scene, camera).then(finish, finish);
+    // Never leave the scene hidden if a driver misreports compile status.
+    const fallback = setTimeout(finish, 4000);
+    return () => {
+      finished = true;
+      clearTimeout(fallback);
+    };
+  }, [get]);
+
+  return null;
+}
+
+// ─── Studio lighting: soft-box reflections plus rose and gold rim lights ──
+export function StudioLights({ envIntensity = 0.65, onReady }: { envIntensity?: number; onReady?: () => void }) {
+  const get = useThree((s) => s.get);
+  const done = useRef(onReady);
+
+  useEffect(() => {
+    done.current = onReady;
+  }, [onReady]);
 
   useEffect(() => {
     const { gl, scene } = get();
-    const pmrem = new THREE.PMREMGenerator(gl);
+    let cancelled = false;
+    let pmrem: THREE.PMREMGenerator | null = null;
+    let env: THREE.Texture | null = null;
     const room = new RoomEnvironment();
-    const env = pmrem.fromScene(room, 0.04).texture;
-    room.dispose();
-    scene.environment = env;
-    scene.environmentIntensity = envIntensity;
+    // Compile the room's materials in the background first, under the same
+    // render-target settings the cube capture uses, so the capture doesn't stall on them.
+    const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    const previous = gl.getRenderTarget();
+    gl.setRenderTarget(target);
+    const compiled = gl.compileAsync(room, new THREE.PerspectiveCamera(90, 1, 0.1, 100));
+    gl.setRenderTarget(previous);
+    // The generator's own filtering shaders are created and used in one go,
+    // so let it build them in a dry run that draws nothing, then compile them
+    // in the background too. Private API: if it ever changes, this is skipped.
+    pmrem = new THREE.PMREMGenerator(gl);
+    const internal = pmrem as unknown as {
+      _renderCube?: (...args: unknown[]) => void;
+      _boxMesh?: THREE.Mesh;
+      _ggxMaterial?: THREE.Material | null;
+      _integrationMaterial?: THREE.Material | null;
+    };
+    const filters: Promise<unknown>[] = [];
+    if (typeof internal._renderCube === "function" && internal._boxMesh) {
+      const renderCube = internal._renderCube;
+      internal._renderCube = () => {};
+      pmrem.fromScene(new THREE.Scene()).dispose();
+      internal._renderCube = renderCube;
+      const box = internal._boxMesh;
+      for (const material of [internal._ggxMaterial, internal._integrationMaterial]) {
+        if (!material) continue;
+        const probe = new THREE.Mesh(box.geometry, material);
+        gl.setRenderTarget(target);
+        filters.push(gl.compileAsync(probe, new THREE.PerspectiveCamera(90, 1, 0.1, 10)));
+        gl.setRenderTarget(previous);
+      }
+    }
+    Promise.all([compiled, ...filters]).then(() => {
+      target.dispose();
+      if (cancelled || !pmrem) {
+        room.dispose();
+        return;
+      }
+      env = pmrem.fromScene(room).texture;
+      room.dispose();
+      scene.environment = env;
+      scene.environmentIntensity = envIntensity;
+      done.current?.();
+    });
     return () => {
+      cancelled = true;
       scene.environment = null;
-      env.dispose();
-      pmrem.dispose();
+      env?.dispose();
+      pmrem?.dispose();
     };
   }, [get, envIntensity]);
 

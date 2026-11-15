@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { MotionValue } from "framer-motion";
@@ -16,6 +16,8 @@ import {
   SaltSlab,
   SteelRing,
   StudioLights,
+  tuneRenderer,
+  WarmUp,
   clamp01,
   layerY,
   newSlabState,
@@ -25,7 +27,7 @@ import {
 import type { Keys } from "./three/slabKit";
 import { BURST_RANGE, COOKS_RANGE, EXPLODE, FROST, HEAT, THICKNESS } from "./storyTimeline";
 
-export type PlaceCallout = (index: number, x: number, y: number, opacity: number) => void;
+export type PlaceCallout = (index: number, x: number, y: number, opacity: number, viewportWidth: number) => void;
 
 interface StoryProps {
   progress: MotionValue<number>;
@@ -85,6 +87,12 @@ const RING_Y: Keys = [
   [0.66, RING_SEAT_Y],
   [0.73, -5],
 ];
+// The hot (from below) and cold (from above) fill lights never overlap, so one
+// light plays both parts: one fewer light for every pixel the slab covers.
+const HEAT_GLOW = new THREE.Color("#ff6a1f");
+const FROST_GLOW = new THREE.Color("#9fd4ff");
+const HEAT_LIGHT_LOCAL = new THREE.Vector3(0, -0.9, 0);
+
 const CORNERS = [
   [1, 1],
   [1, -1],
@@ -105,8 +113,7 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
   const pivot = useRef<THREE.Group>(null);
   const holder = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Group>(null);
-  const heatLight = useRef<THREE.PointLight>(null);
-  const coldLight = useRef<THREE.PointLight>(null);
+  const fxLight = useRef<THREE.PointLight>(null);
 
   const pointer = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const intro = useRef(0);
@@ -179,8 +186,22 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
       ring.current.position.y = ry;
       ring.current.visible = ry > -4.5;
     }
-    if (heatLight.current) heatLight.current.intensity = heatV * 28 + pulse * 12;
-    if (coldLight.current) coldLight.current.intensity = frostV * 18;
+    const fx = fxLight.current;
+    if (fx) {
+      if (heatV + pulse >= frostV) {
+        pv.updateMatrixWorld();
+        fx.position.copy(HEAT_LIGHT_LOCAL);
+        pv.localToWorld(fx.position);
+        fx.color.copy(HEAT_GLOW);
+        fx.distance = 7;
+        fx.intensity = heatV * 28 + pulse * 12;
+      } else {
+        fx.position.set(0, 3, 2);
+        fx.color.copy(FROST_GLOW);
+        fx.distance = 12;
+        fx.intensity = frostV * 18;
+      }
+    }
 
     // ── Camera: keep the slab framed on portrait screens too ──
     const explodeW = clamp01(gap / (0.42 * spread));
@@ -194,7 +215,7 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
 
     // ── Mineral callouts pinned to each stratum's outermost edge ──
     if (explodeW < 0.02) {
-      for (let i = 0; i < SLAB_LAYERS; i++) placeCallout(i, 0, 0, 0);
+      for (let i = 0; i < SLAB_LAYERS; i++) placeCallout(i, 0, 0, 0, size.width);
       return;
     }
     pv.updateMatrixWorld();
@@ -212,7 +233,7 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
       pv.localToWorld(v).project(camera);
       const sy = (-v.y * 0.5 + 0.5) * size.height;
       const x = Math.min(size.width - 6, Math.max(6, edge + (right ? 8 : -8)));
-      placeCallout(i, x, sy, explodeW);
+      placeCallout(i, x, sy, explodeW, size.width);
     }
   });
 
@@ -223,12 +244,11 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
           <SaltSlab state={slab} />
         </group>
         <SteelRing groupRef={ring} />
-        <pointLight ref={heatLight} position={[0, -0.9, 0]} color="#ff6a1f" intensity={0} distance={7} />
         <GlowDisc level={heat} color="#ff5a1f" size={6.5} y={-0.5} strength={0.85} />
         <GlowDisc level={heat} color="#ff7a2f" size={4.6} y={SLAB_H / 2 + 0.03} strength={0.3} />
         <Particles count={150} level={heat} mode="rise" color="#ffae42" size={0.12} spread={1.7} height={3.4} base={SLAB_H / 2} seed={2} />
       </group>
-      <pointLight ref={coldLight} position={[0, 3, 2]} color="#9fd4ff" intensity={0} distance={12} />
+      <pointLight ref={fxLight} intensity={0} />
       <Particles count={260} level={frost} mode="fall" color="#d6ecff" size={0.08} spread={5} height={7} base={-3} seed={4} />
       <Particles count={120} level={dust} mode="drift" color="#ffc8a8" size={0.05} spread={5.5} height={5} base={-2.2} seed={9} />
       <CrystalBurst amount={burst} originY={-0.17} />
@@ -236,17 +256,35 @@ function StoryRig({ progress, placeCallout, calm }: StoryProps) {
   );
 }
 
-export default function HeroStoryCanvas({ active, ...props }: StoryProps & { active: boolean }) {
+export default function HeroStoryCanvas({
+  active,
+  onReady,
+  ...props
+}: StoryProps & { active: boolean; onReady: () => void }) {
+  // Hold rendering until every shader and texture is ready, so the first frames never stall.
+  const [envReady, setEnvReady] = useState(false);
+  const [ready, setReady] = useState(false);
   return (
     <Canvas
-      frameloop={active ? "always" : "never"}
+      frameloop={active && ready ? "always" : "never"}
       dpr={[1, 1.75]}
       camera={{ fov: 30, near: 0.1, far: 120, position: [0, 0.5, 14] }}
       gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       style={{ pointerEvents: "none" }}
+      onCreated={tuneRenderer}
     >
-      <StudioLights />
-      <StoryRig {...props} />
+      <StudioLights onReady={() => setEnvReady(true)} />
+      <Suspense fallback={null}>
+        <StoryRig {...props} />
+        {envReady && (
+          <WarmUp
+            onReady={() => {
+              setReady(true);
+              onReady();
+            }}
+          />
+        )}
+      </Suspense>
     </Canvas>
   );
 }

@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { motion, useMotionValue, useScroll, useTransform } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { motion, useInView, useMotionValue, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import CssSlab from "./CssSlab";
+
+const DishesCanvas = dynamic(() => import("./DishesCanvas"), { ssr: false });
 
 const DISHES = [
   {
@@ -47,6 +50,12 @@ export default function DishesRail() {
   const section = useRef<HTMLElement>(null);
   const rail = useRef<HTMLDivElement>(null);
   const distance = useMotionValue(0);
+  const slots = useRef<(HTMLElement | null)[]>([]);
+  const calm = useReducedMotion() ?? false;
+  const inView = useInView(section);
+  // Create the 3D dishes only once the section is about a screen away.
+  const near = useInView(section, { margin: "900px 0px", once: true });
+  const [dishesReady, setDishesReady] = useState(false);
   const { scrollYProgress } = useScroll({ target: section, offset: ["start start", "end end"] });
   const x = useTransform([scrollYProgress, distance], ([p, d]: number[]) => -p * d);
 
@@ -95,8 +104,17 @@ export default function DishesRail() {
                 <span className="text-neutral-500 tabular-nums">0{i + 1}</span>
               </div>
 
-              <div className="flex flex-1 items-center justify-center">
-                <div className="motion-safe:animate-float" style={{ animationDelay: `${i * -1.2}s` }}>
+              {/* The 3D dish is drawn into this slot; the CSS slab holds the space until it's ready. */}
+              <div
+                ref={(el) => {
+                  slots.current[i] = el;
+                }}
+                className="-mx-6 flex flex-1 items-center justify-center sm:-mx-8"
+              >
+                <div
+                  className={`motion-safe:animate-float transition-opacity duration-700 ${dishesReady ? "opacity-0" : "opacity-100"}`}
+                  style={{ animationDelay: `${i * -1.2}s` }}
+                >
                   <CssSlab size={150} tone={dish.tone} />
                 </div>
               </div>
@@ -109,6 +127,13 @@ export default function DishesRail() {
             </article>
           ))}
         </motion.div>
+
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-0 z-10 transition-opacity duration-1000 ${dishesReady ? "opacity-100" : "opacity-0"}`}
+        >
+          {near && <DishesCanvas slots={slots} active={inView} calm={calm} onReady={() => setDishesReady(true)} />}
+        </div>
 
         <div className="mx-auto mt-8 w-full max-w-6xl px-5 sm:px-6">
           <div className="h-px overflow-hidden bg-white/10">

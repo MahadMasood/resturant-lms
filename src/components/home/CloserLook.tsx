@@ -68,6 +68,9 @@ export default function CloserLook() {
   const [piece, setPiece] = useState<SetPiece>("slab");
   const stageRef = useRef<HTMLDivElement>(null);
   const inView = useInView(stageRef, { margin: "100px 0px" });
+  // Create the WebGL context only once the viewer is about a screen away.
+  const near = useInView(stageRef, { margin: "900px 0px", once: true });
+  const [sceneReady, setSceneReady] = useState(false);
   const drag = useRef<DragState>({ offset: 0, down: false, lastX: 0 });
   const info = PIECES[piece];
 
@@ -130,8 +133,12 @@ export default function CloserLook() {
           </AnimatePresence>
           <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_45%,rgba(255,255,255,0.08),transparent_70%)]" />
 
-          <div className="absolute inset-0">
-            <CloserLookCanvas piece={piece} drag={drag} active={inView} />
+          <div
+            className={`absolute inset-0 transition-opacity duration-1000 ease-out ${sceneReady ? "opacity-100" : "opacity-0"}`}
+          >
+            {near && (
+              <CloserLookCanvas piece={piece} drag={drag} active={inView} onReady={() => setSceneReady(true)} />
+            )}
           </div>
 
           <div className="pointer-events-none absolute left-5 top-5 sm:left-8 sm:top-7">

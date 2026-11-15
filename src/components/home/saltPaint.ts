@@ -14,7 +14,85 @@ export function rng(seed: number) {
 function makeCanvas(size: number) {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
-  return [canvas, canvas.getContext("2d")!] as const;
+  // CPU-backed: cheap pixel access below, and a direct upload when used as a WebGL texture.
+  return [canvas, canvas.getContext("2d", { willReadFrequently: true })!] as const;
+}
+
+interface Speck {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Hands control back to the browser so long paints never block input or animation. */
+function yieldToMain(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (scheduler?.yield) return scheduler.yield();
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    channel.port2.postMessage(null);
+  });
+}
+
+/**
+ * Blends thousands of tiny rectangles straight into pixel memory with the same
+ * area coverage a canvas fillRect would give, at a fraction of the cost of
+ * one draw call per speck. `next` fills in each speck in turn. Work is sliced
+ * into ~6 ms chunks so it never stalls the page.
+ */
+async function blendSpecks(
+  ctx: CanvasRenderingContext2D,
+  size: number,
+  count: number,
+  next: (speck: Speck) => void,
+  opaque: boolean
+) {
+  const image = ctx.getImageData(0, 0, size, size);
+  const d = image.data;
+  const s: Speck = { r: 0, g: 0, b: 0, a: 0, x: 0, y: 0, w: 0, h: 0 };
+  let sliceStart = performance.now();
+  for (let i = 0; i < count; i++) {
+    if ((i & 1023) === 0 && performance.now() - sliceStart > 6) {
+      await yieldToMain();
+      sliceStart = performance.now();
+    }
+    next(s);
+    const x1 = s.x + s.w;
+    const y1 = s.y + s.h;
+    const py1 = Math.min(size, Math.ceil(y1));
+    const px1 = Math.min(size, Math.ceil(x1));
+    for (let py = Math.max(0, Math.floor(s.y)); py < py1; py++) {
+      const cy = Math.min(py + 1, y1) - Math.max(py, s.y);
+      for (let px = Math.max(0, Math.floor(s.x)); px < px1; px++) {
+        const a = s.a * cy * (Math.min(px + 1, x1) - Math.max(px, s.x));
+        if (a <= 0) continue;
+        const o = (py * size + px) * 4;
+        if (opaque) {
+          // Source-over onto an opaque pixel reduces to a plain lerp.
+          d[o] += (s.r - d[o]) * a;
+          d[o + 1] += (s.g - d[o + 1]) * a;
+          d[o + 2] += (s.b - d[o + 2]) * a;
+        } else {
+          // Source-over on straight (non-premultiplied) RGBA.
+          const da = d[o + 3] / 255;
+          const oa = a + da * (1 - a);
+          const keep = (da * (1 - a)) / oa;
+          const add = a / oa;
+          d[o] = s.r * add + d[o] * keep;
+          d[o + 1] = s.g * add + d[o + 1] * keep;
+          d[o + 2] = s.b * add + d[o + 2] * keep;
+          d[o + 3] = oa * 255;
+        }
+      }
+    }
+  }
+  ctx.putImageData(image, 0, 0);
 }
 
 function facet(ctx: CanvasRenderingContext2D, r: () => number, x: number, y: number, radius: number) {
@@ -85,7 +163,7 @@ function crystalBand(ctx: CanvasRenderingContext2D, r: () => number, size: numbe
 }
 
 /** Pale peach-pink salt with salmon zones, jagged white crystal bands and fine grit, as in the real slabs. */
-export function paintSalt(seed = 7, size = 1024) {
+export async function paintSalt(seed = 7, size = 1024) {
   const [canvas, ctx] = makeCanvas(size);
   const r = rng(seed);
   const k = size / 1024;
@@ -133,17 +211,26 @@ export function paintSalt(seed = 7, size = 1024) {
   }
 
   // Fine sugary grit across the whole surface.
-  for (let i = 0; i < 70000 * k * k; i++) {
-    const light = r() > 0.4;
-    ctx.fillStyle = light ? `rgba(255,255,255,${0.15 + r() * 0.45})` : `rgba(196,112,96,${0.08 + r() * 0.18})`;
-    const s = (0.6 + r() * 1.6) * k;
-    ctx.fillRect(r() * size, r() * size, s, s);
-  }
+  await yieldToMain();
+  await blendSpecks(ctx, size, Math.ceil(70000 * k * k), (sp) => {
+    if (r() > 0.4) {
+      sp.r = sp.g = sp.b = 255;
+      sp.a = 0.15 + r() * 0.45;
+    } else {
+      sp.r = 196;
+      sp.g = 112;
+      sp.b = 96;
+      sp.a = 0.08 + r() * 0.18;
+    }
+    sp.w = sp.h = (0.6 + r() * 1.6) * k;
+    sp.x = r() * size;
+    sp.y = r() * size;
+  }, true);
   return canvas;
 }
 
 /** Grey-scale relief: a gritty crystalline surface with the odd fissure. */
-export function paintBump(seed = 11, size = 512) {
+export async function paintBump(seed = 11, size = 512) {
   const [canvas, ctx] = makeCanvas(size);
   const r = rng(seed);
   ctx.fillStyle = "#808080";
@@ -154,11 +241,14 @@ export function paintBump(seed = 11, size = 512) {
     ctx.fillStyle = `rgba(${v},${v},${v},0.5)`;
     ctx.fill();
   }
-  for (let i = 0; i < 40000; i++) {
-    const v = r() > 0.5 ? 255 : 0;
-    ctx.fillStyle = `rgba(${v},${v},${v},${0.08 + r() * 0.22})`;
-    ctx.fillRect(r() * size, r() * size, 1 + r(), 1 + r());
-  }
+  await blendSpecks(ctx, size, 40000, (sp) => {
+    sp.r = sp.g = sp.b = r() > 0.5 ? 255 : 0;
+    sp.a = 0.08 + r() * 0.22;
+    sp.x = r() * size;
+    sp.y = r() * size;
+    sp.w = 1 + r();
+    sp.h = 1 + r();
+  }, true);
   ctx.lineCap = "round";
   for (let i = 0; i < 6; i++) {
     ctx.strokeStyle = `rgba(40,40,40,${0.2 + r() * 0.3})`;
@@ -169,16 +259,18 @@ export function paintBump(seed = 11, size = 512) {
 }
 
 /** Transparent frost: dense white specks and feathered ice crystals. */
-export function paintFrost(seed = 5, size = 512) {
+export async function paintFrost(seed = 5, size = 512) {
   const [canvas, ctx] = makeCanvas(size);
   const r = rng(seed);
   ctx.fillStyle = "rgba(232,244,255,0.38)";
   ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 9000; i++) {
-    ctx.fillStyle = `rgba(255,255,255,${r() * 0.75})`;
-    const s = r() * 1.8 + 0.3;
-    ctx.fillRect(r() * size, r() * size, s, s);
-  }
+  await blendSpecks(ctx, size, 9000, (sp) => {
+    sp.r = sp.g = sp.b = 255;
+    sp.a = r() * 0.75;
+    sp.w = sp.h = r() * 1.8 + 0.3;
+    sp.x = r() * size;
+    sp.y = r() * size;
+  }, false);
   ctx.lineCap = "round";
   for (let i = 0; i < 140; i++) {
     const x = r() * size;
@@ -210,9 +302,55 @@ export function paintGlow(size = 256) {
 }
 
 let saltUrl: string | null = null;
+let saltQueued = false;
+const saltListeners = new Set<() => void>();
 
-/** Data URL of the salt texture, for CSS-rendered slabs. */
-export function saltDataUrl() {
-  if (!saltUrl) saltUrl = paintSalt(7, 512).toDataURL("image/jpeg", 0.85);
-  return saltUrl;
+/**
+ * Subscribe to the salt texture for CSS-rendered slabs. It is painted in idle
+ * time and JPEG-encoded off the main thread, so it never competes with the hero.
+ */
+export function subscribeSaltUrl(listener: () => void) {
+  saltListeners.add(listener);
+  if (!saltUrl && !saltQueued) {
+    saltQueued = true;
+    const paint = () =>
+      paintSalt(7, 512).then((canvas) =>
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return;
+            saltUrl = URL.createObjectURL(blob);
+            saltListeners.forEach((l) => l());
+          },
+          "image/jpeg",
+          0.85
+        )
+      );
+    if ("requestIdleCallback" in window) window.requestIdleCallback(paint, { timeout: 3000 });
+    else setTimeout(paint, 400);
+  }
+  return () => {
+    saltListeners.delete(listener);
+  };
+}
+
+export const getSaltUrl = () => saltUrl;
+
+export interface SlabCanvases {
+  salt: HTMLCanvasElement;
+  bump: HTMLCanvasElement;
+  frost: HTMLCanvasElement;
+  glow: HTMLCanvasElement;
+}
+
+let slabCanvases: Promise<SlabCanvases> | null = null;
+
+/** Paints the 3D slab's textures once, in small slices; start it early to overlap with the 3D download. */
+export function paintSlabCanvases() {
+  slabCanvases ??= (async () => {
+    const salt = await paintSalt();
+    const bump = await paintBump();
+    const frost = await paintFrost();
+    return { salt, bump, frost, glow: paintGlow() };
+  })();
+  return slabCanvases;
 }

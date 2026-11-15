@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
@@ -24,6 +24,7 @@ import {
 import type { ChapterKey } from "./storyTimeline";
 import type { PlaceCallout } from "./HeroStoryCanvas";
 import CtaButton from "./CtaButton";
+import { paintSlabCanvases } from "./saltPaint";
 
 const HeroStoryCanvas = dynamic(() => import("./HeroStoryCanvas"), { ssr: false });
 
@@ -53,6 +54,13 @@ export default function HeroStory() {
   const ref = useRef<HTMLElement>(null);
   const callouts = useRef<(HTMLDivElement | null)[]>([]);
   const calloutShown = useRef<boolean[]>([]);
+  const calloutWidths = useRef<number[]>([]);
+  const [sceneReady, setSceneReady] = useState(false);
+
+  // Start painting the slab textures right away, while the 3D engine is still downloading.
+  useEffect(() => {
+    void paintSlabCanvases();
+  }, []);
   const calm = useReducedMotion() ?? false;
   const inView = useInView(ref);
 
@@ -64,17 +72,20 @@ export default function HeroStory() {
   const glow = useTransform(progress, BG_STOPS, GLOW_COLORS);
   const glowBg = useMotionTemplate`radial-gradient(70% 55% at 50% 58%, ${glow}, transparent 72%)`;
 
-  const placeCallout: PlaceCallout = (i, x, y, opacity) => {
+  const placeCallout: PlaceCallout = (i, x, y, opacity, viewport) => {
     const el = callouts.current[i];
     if (!el) return;
     const shown = opacity > 0;
     if (!shown && !calloutShown.current[i]) return;
+    // Measure the label once as it appears, not on every frame.
+    if (shown && !calloutShown.current[i]) {
+      calloutWidths.current[i] = (el.firstElementChild as HTMLElement | null)?.offsetWidth ?? 0;
+    }
     calloutShown.current[i] = shown;
     el.style.opacity = String(opacity);
     if (!shown) return;
     // Keep the whole label on screen; on narrow phones it may overlap the slab edge.
-    const width = (el.firstElementChild as HTMLElement | null)?.offsetWidth ?? 0;
-    const viewport = el.parentElement?.clientWidth ?? window.innerWidth;
+    const width = calloutWidths.current[i] ?? 0;
     const px = i % 2 === 0 ? Math.min(x, viewport - width - 8) : Math.max(x, width + 8);
     el.style.transform = `translate3d(${px.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
   };
@@ -89,10 +100,16 @@ export default function HeroStory() {
           aria-hidden
           className="absolute inset-0"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          animate={{ opacity: sceneReady ? 1 : 0 }}
           transition={{ duration: 1.2, ease: "easeOut" }}
         >
-          <HeroStoryCanvas progress={progress} placeCallout={placeCallout} calm={calm} active={inView} />
+          <HeroStoryCanvas
+            progress={progress}
+            placeCallout={placeCallout}
+            calm={calm}
+            active={inView}
+            onReady={() => setSceneReady(true)}
+          />
         </motion.div>
 
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-linear-to-b from-black/55 via-transparent to-black/65" />
@@ -288,7 +305,8 @@ function Chapter({
   const opacity = useTransform(progress, input, [0, 1, 1, 0]);
   const y = useTransform(progress, input, [60, 0, 0, -60]);
   const blur = useTransform(progress, input, [10, 0, 0, 10]);
-  const filter = useMotionTemplate`blur(${blur}px)`;
+  // "none" rather than blur(0px), so settled chapters skip the filter pass entirely.
+  const filter = useTransform(blur, (b) => (b < 0.05 ? "none" : `blur(${b.toFixed(2)}px)`));
   const visibility = useTransform(opacity, (o) => (o < 0.01 ? "hidden" : "visible"));
 
   return (

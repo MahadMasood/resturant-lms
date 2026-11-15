@@ -10,9 +10,9 @@ export default function FinalCta() {
   return (
     <section className="relative overflow-hidden bg-black px-6 py-[16vh] text-center">
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/3 h-[60vmax] w-[60vmax] -translate-x-1/2 -translate-y-1/2 rounded-full bg-rose-600/20 blur-[120px] motion-safe:animate-aurora" />
+        <div className="absolute left-1/2 top-1/3 h-[90vmax] w-[90vmax] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(225,29,72,0.2)_0%,rgba(225,29,72,0.12)_30%,rgba(225,29,72,0.03)_52%,transparent_68%)] motion-safe:animate-aurora" />
         <div
-          className="absolute left-1/3 top-2/3 h-[45vmax] w-[45vmax] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/15 blur-[120px] motion-safe:animate-aurora"
+          className="absolute left-1/3 top-2/3 h-[70vmax] w-[70vmax] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,158,11,0.15)_0%,rgba(245,158,11,0.09)_30%,rgba(245,158,11,0.02)_52%,transparent_68%)] motion-safe:animate-aurora"
           style={{ animationDelay: "-7s" }}
         />
       </div>

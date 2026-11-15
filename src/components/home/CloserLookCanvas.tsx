@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
@@ -13,7 +13,9 @@ import {
   SaltSlab,
   SteelRing,
   StudioLights,
-  getSlabTextures,
+  tuneRenderer,
+  WarmUp,
+  useSlabTextures,
   newSlabState,
 } from "./three/slabKit";
 
@@ -36,7 +38,7 @@ const TARGETS: Record<
 };
 
 function ContactShadow({ y }: { y: number }) {
-  const tex = getSlabTextures();
+  const tex = useSlabTextures();
   const material = useMemo(
     () => new THREE.MeshBasicMaterial({ map: tex.glow, color: "#000000", transparent: true, opacity: 0.6, depthWrite: false }),
     [tex]
@@ -137,21 +139,37 @@ export default function CloserLookCanvas({
   piece,
   drag,
   active,
+  onReady,
 }: {
   piece: SetPiece;
   drag: RefObject<DragState>;
   active: boolean;
+  onReady: () => void;
 }) {
+  // Hold rendering until every shader and texture is ready, so the first frames never stall.
+  const [envReady, setEnvReady] = useState(false);
+  const [ready, setReady] = useState(false);
   return (
     <Canvas
-      frameloop={active ? "always" : "never"}
+      frameloop={active && ready ? "always" : "never"}
       dpr={[1, 1.75]}
       camera={{ fov: 30, near: 0.1, far: 80, position: [0, 3.1, 11] }}
       gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       style={{ pointerEvents: "none" }}
+      onCreated={tuneRenderer}
     >
-      <StudioLights envIntensity={0.75} />
-      <SetRig piece={piece} drag={drag} />
+      <StudioLights envIntensity={0.75} onReady={() => setEnvReady(true)} />
+      <Suspense fallback={null}>
+        <SetRig piece={piece} drag={drag} />
+        {envReady && (
+          <WarmUp
+            onReady={() => {
+              setReady(true);
+              onReady();
+            }}
+          />
+        )}
+      </Suspense>
     </Canvas>
   );
 }

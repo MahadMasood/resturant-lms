@@ -2,13 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
-import { saltDataUrl } from "./saltPaint";
+import { getSaltUrl, subscribeSaltUrl } from "./saltPaint";
 
-const noopSubscribe = () => () => {};
-
-/** The painted salt texture as a data URL (null during SSR). */
+/** The painted salt texture as an image URL (null until it's ready, and during SSR). */
 function useSaltTexture() {
-  return useSyncExternalStore(noopSubscribe, saltDataUrl, () => null);
+  return useSyncExternalStore(subscribeSaltUrl, getSaltUrl, () => null);
 }
 
 type Tone = "plain" | "hot" | "cold";
@@ -82,13 +80,13 @@ export default function CssSlab({
       {tone === "hot" && (
         <div
           aria-hidden
-          className="absolute inset-[-30%] rounded-full bg-[radial-gradient(circle,rgba(255,106,31,0.55),transparent_62%)] blur-2xl"
+          className="absolute inset-[-40%] rounded-full bg-[radial-gradient(circle,rgba(255,106,31,0.5)_0%,rgba(255,106,31,0.24)_30%,rgba(255,106,31,0.06)_52%,transparent_68%)]"
         />
       )}
       {tone === "cold" && (
         <div
           aria-hidden
-          className="absolute inset-[-30%] rounded-full bg-[radial-gradient(circle,rgba(125,211,252,0.45),transparent_62%)] blur-2xl"
+          className="absolute inset-[-40%] rounded-full bg-[radial-gradient(circle,rgba(125,211,252,0.42)_0%,rgba(125,211,252,0.2)_30%,rgba(125,211,252,0.05)_52%,transparent_68%)]"
         />
       )}
       <div

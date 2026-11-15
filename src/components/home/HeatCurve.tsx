@@ -40,6 +40,7 @@ const STAGES = [
 export default function HeatCurve() {
   const ref = useRef<HTMLDivElement>(null);
   const path = useRef<SVGPathElement>(null);
+  const pathLength = useRef(0);
   const dot = useRef<SVGGElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start 0.8", "end 0.55"] });
   const draw = useSpring(scrollYProgress, { stiffness: 90, damping: 24, restDelta: 0.001 });
@@ -49,7 +50,9 @@ export default function HeatCurve() {
     const p = path.current;
     const g = dot.current;
     if (!p || !g) return;
-    const pt = p.getPointAtLength(p.getTotalLength() * Math.min(1, Math.max(0, v)));
+    // The path never changes, so measure its length once.
+    pathLength.current ||= p.getTotalLength();
+    const pt = p.getPointAtLength(pathLength.current * Math.min(1, Math.max(0, v)));
     g.setAttribute("transform", `translate(${pt.x} ${pt.y})`);
     g.style.opacity = v > 0.01 ? "1" : "0";
   });
