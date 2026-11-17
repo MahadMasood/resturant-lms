@@ -36,6 +36,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "filename and contentType required" }, { status: 400 });
   }
 
+  const ALLOWED_MIME_TYPES = [
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/x-msvideo",
+    "video/ogg",
+  ];
+  if (!ALLOWED_MIME_TYPES.includes(contentType.toLowerCase())) {
+    return NextResponse.json(
+      { error: "Invalid video format. Allowed MIME types: video/mp4, video/webm, video/quicktime" },
+      { status: 400 }
+    );
+  }
+
   try {
     const s3 = new S3Client({
       region: "auto",

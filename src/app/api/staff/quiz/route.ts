@@ -4,6 +4,25 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (m) => {
+    switch (m) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return m;
+    }
+  });
+}
+
 // GET /api/staff/quiz?moduleId=xxx
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -127,11 +146,16 @@ export async function POST(req: NextRequest) {
       });
       const certId = `CERT-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
 
+      const safeUserName = escapeHtml(userName);
+      const safeModuleName = escapeHtml(moduleName);
+      const safeDateStr = escapeHtml(dateStr);
+      const safeCertId = escapeHtml(certId);
+
       const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Certificate of Accreditation — ${userName}</title>
+<title>Certificate of Accreditation — ${safeUserName}</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #18181b; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; margin: 0; }
   .controls { margin-bottom: 24px; display: flex; gap: 12px; }
@@ -150,14 +174,14 @@ export async function POST(req: NextRequest) {
     <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.15em; color: #71717a; font-weight: 700;">Hospitality Compliance Council</div>
     <div class="title">Certificate of Accreditation</div>
     <p style="color: #71717a; margin-top: 16px;">This officially certifies that</p>
-    <div class="recipient-name">${userName}</div>
+    <div class="recipient-name">${safeUserName}</div>
     <p style="color: #3f3f46; max-width: 580px; margin: 0 auto; line-height: 1.6;">
-      has successfully completed all anti-cheat verified video training and achieved passing accreditation in <strong>${moduleName}</strong>.
+      has successfully completed all anti-cheat verified video training and achieved passing accreditation in <strong>${safeModuleName}</strong>.
     </p>
     <div style="margin: 28px 0;"><span class="score-badge">Evaluation Score: ${score}% (Passed)</span></div>
     <div style="border-top: 1px solid #e4e4e7; padding-top: 20px; font-size: 12px; color: #71717a; display: flex; justify-content: space-between;">
-      <span>Date Issued: ${dateStr}</span>
-      <span>Verification ID: ${certId}</span>
+      <span>Date Issued: ${safeDateStr}</span>
+      <span>Verification ID: ${safeCertId}</span>
     </div>
   </div>
 </body>

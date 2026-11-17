@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
 // Public endpoint for health inspectors and compliance auditors to verify certificates
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const maskedLocal = local.length > 2 ? `${local[0]}***${local[local.length - 1]}` : `${local[0]}***`;
+  return `${maskedLocal}@${domain}`;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const certId = searchParams.get("certId") || searchParams.get("id");
@@ -58,7 +65,7 @@ export async function GET(req: NextRequest) {
       issuedAt: certificate.issuedAt,
       pdfUrl: certificate.pdfUrl,
       recipientName: certificate.user.name,
-      recipientEmail: certificate.user.email,
+      recipientEmail: maskEmail(certificate.user.email),
       venueName: certificate.user.tenant?.name || "Accredited Venue",
       courseTitle: certificate.module.title,
       score: attempt?.score ?? 100,

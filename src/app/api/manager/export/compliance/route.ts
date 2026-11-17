@@ -1,23 +1,44 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+function sanitizeCsvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '""';
+  let str = String(value);
+  // Neutralize spreadsheet formula triggers (=, +, -, @, tabs, returns)
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const tenantId = session.user.tenantId;
+  const queryTenantId = req.nextUrl.searchParams.get("tenantId");
+  const tenantId =
+    session.user.role === "SUPER_ADMIN"
+      ? (queryTenantId || session.user.tenantId)
+      : session.user.tenantId;
+
+  if (!tenantId && session.user.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Tenant ID required for compliance export" }, { status: 400 });
+  }
+
   const tenantName = session.user.tenantName || "Restaurant";
 
   // Fetch all staff members in this tenant with progress and certificates
+  const whereClause: { role: "STAFF"; tenantId?: string } = { role: "STAFF" };
+  if (tenantId) {
+    whereClause.tenantId = tenantId;
+  }
+
   const staff = await prisma.user.findMany({
-    where: {
-      tenantId: tenantId ?? undefined,
-      role: "STAFF",
-    },
+    where: whereClause,
     include: {
       watchProgress: {
         include: { module: { select: { title: true } } },
@@ -51,17 +72,17 @@ export async function GET() {
   for (const s of staff) {
     if (s.watchProgress.length === 0) {
       rows.push([
-        `"${tenantName}"`,
-        `"${s.name}"`,
-        `"${s.email}"`,
-        `"No module started"`,
-        "0%",
-        "0",
-        "No",
-        "N/A",
-        "No",
-        "N/A",
-        "N/A",
+        sanitizeCsvCell(tenantName),
+        sanitizeCsvCell(s.name),
+        sanitizeCsvCell(s.email),
+        sanitizeCsvCell("No module started"),
+        sanitizeCsvCell("0%"),
+        sanitizeCsvCell("0"),
+        sanitizeCsvCell("No"),
+        sanitizeCsvCell("N/A"),
+        sanitizeCsvCell("No"),
+        sanitizeCsvCell("N/A"),
+        sanitizeCsvCell("N/A"),
       ]);
     } else {
       for (const wp of s.watchProgress) {
@@ -74,17 +95,17 @@ export async function GET() {
         const cert = s.certificates.find((c: { moduleId: string; pdfUrl: string; issuedAt: Date }) => c.moduleId === wp.moduleId);
 
         rows.push([
-          `"${tenantName}"`,
-          `"${s.name}"`,
-          `"${s.email}"`,
-          `"${wp.module.title}"`,
-          `${percent}%`,
-          `${Math.round(wp.watchedSeconds)}`,
-          wp.completed ? "Yes" : "No",
-          attempt ? `${attempt.score}%` : "Not Attempted",
-          attempt && attempt.passed ? "Yes" : "No",
-          cert ? `"${cert.pdfUrl}"` : "N/A",
-          cert ? `"${new Date(cert.issuedAt).toISOString().split("T")[0]}"` : "N/A",
+          sanitizeCsvCell(tenantName),
+          sanitizeCsvCell(s.name),
+          sanitizeCsvCell(s.email),
+          sanitizeCsvCell(wp.module.title),
+          sanitizeCsvCell(`${percent}%`),
+          sanitizeCsvCell(`${Math.round(wp.watchedSeconds)}`),
+          sanitizeCsvCell(wp.completed ? "Yes" : "No"),
+          sanitizeCsvCell(attempt ? `${attempt.score}%` : "Not Attempted"),
+          sanitizeCsvCell(attempt && attempt.passed ? "Yes" : "No"),
+          sanitizeCsvCell(cert ? cert.pdfUrl : "N/A"),
+          sanitizeCsvCell(cert ? new Date(cert.issuedAt).toISOString().split("T")[0] : "N/A"),
         ]);
       }
     }

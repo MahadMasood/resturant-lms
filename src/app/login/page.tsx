@@ -79,24 +79,26 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Demo Fast Login Pills */}
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-4 space-y-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 text-center">
-            Demo Accounts (Neon Postgres Seeded)
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {DEMO_ACCOUNTS.map((acc) => (
-              <button
-                key={acc.email}
-                type="button"
-                onClick={() => fillAccount(acc.email, acc.pass)}
-                className="rounded-xl border border-neutral-800 bg-neutral-800/80 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:border-indigo-500 hover:bg-neutral-800 hover:text-white transition text-center truncate"
-              >
-                {acc.role}
-              </button>
-            ))}
+        {/* Demo Fast Login Pills (Development & Testing only) */}
+        {process.env.NODE_ENV !== "production" && (
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-4 space-y-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500 text-center">
+              Development Test Accounts
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {DEMO_ACCOUNTS.map((acc) => (
+                <button
+                  key={acc.email}
+                  type="button"
+                  onClick={() => fillAccount(acc.email, acc.pass)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-800/80 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:border-indigo-500 hover:bg-neutral-800 hover:text-white transition text-center truncate"
+                >
+                  {acc.role}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Login form */}
         <form
