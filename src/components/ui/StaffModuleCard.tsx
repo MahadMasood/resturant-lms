@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import VideoPlayer from "@/components/ui/VideoPlayer";
 
@@ -31,10 +31,16 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
     module.completed || (module.durationSeconds > 0 && module.watchedSeconds >= module.durationSeconds * 0.8)
   );
 
-  const handleCompletionChange = (isDone: boolean) => {
-    setVideoCompleted(isDone);
-    if (onRefresh) onRefresh();
-  };
+  const handleCompletionChange = useCallback(
+    (isDone: boolean) => {
+      setVideoCompleted(isDone);
+      // Only notify parent if transitioning to completed, preventing re-render loops
+      if (isDone && !module.completed && onRefresh) {
+        onRefresh();
+      }
+    },
+    [module.completed, onRefresh]
+  );
 
   // If this module is locked sequentially
   if (module.isLocked) {

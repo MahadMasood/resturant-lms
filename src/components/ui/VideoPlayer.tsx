@@ -83,6 +83,11 @@ export default function VideoPlayer({ src, moduleId, title, onCompletionChange }
     [showSkipMessage]
   );
 
+  const onCompletionChangeRef = useRef(onCompletionChange);
+  useEffect(() => {
+    onCompletionChangeRef.current = onCompletionChange;
+  }, [onCompletionChange]);
+
   // ── Load existing user progress on mount ──────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -102,7 +107,8 @@ export default function VideoPlayer({ src, moduleId, title, onCompletionChange }
 
           if (data.completed) {
             setCompleted(true);
-            onCompletionChange?.(true);
+            // Do not call onCompletionChange here: parent already knows the completion
+            // state from the initial module list. Calling it on mount causes infinite fetch loops.
           }
 
           // Offer Smart Resume if previously watched more than 5s and not completed
@@ -120,7 +126,7 @@ export default function VideoPlayer({ src, moduleId, title, onCompletionChange }
       active = false;
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     };
-  }, [moduleId, onCompletionChange]);
+  }, [moduleId]);
 
   // ── Report progress to server ──────────────────────────────────────────────
   const reportProgress = useCallback(
@@ -168,7 +174,7 @@ export default function VideoPlayer({ src, moduleId, title, onCompletionChange }
         const data = await res.json();
         if (data?.completed) {
           setCompleted(true);
-          onCompletionChange?.(true);
+          onCompletionChangeRef.current?.(true);
         }
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 2000);
@@ -176,7 +182,7 @@ export default function VideoPlayer({ src, moduleId, title, onCompletionChange }
         setSaveStatus("idle");
       }
     },
-    [moduleId, onCompletionChange, snapBackToAllowed]
+    [moduleId, snapBackToAllowed]
   );
 
   // ── Scrubbing handler (works for clicks AND drag) ──────────────────────────
