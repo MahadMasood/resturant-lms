@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
+import SecuritySettingsModal from "@/components/ui/SecuritySettingsModal";
 
 export interface NavTabItem {
   id: string;
@@ -33,6 +34,7 @@ export default function PortalLayout({
 }: PortalLayoutProps) {
   const { data: session } = useSession();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
 
   // Close sidebar on Escape key
   useEffect(() => {
@@ -196,9 +198,25 @@ export default function PortalLayout({
 
       {/* Bottom Section */}
       <div className="space-y-2 pt-6 border-t border-neutral-800/80">
+        <button
+          type="button"
+          onClick={() => setSecurityModalOpen(true)}
+          className="w-full flex items-center justify-between rounded-xl border border-neutral-800/80 bg-neutral-900/50 px-3.5 py-2.5 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <span>Password &amp; Security</span>
+          </div>
+          <svg className="w-3 h-3 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
         <Link
           href="/verify"
-          className="w-full flex items-center justify-between rounded-xl border border-neutral-800/80 bg-neutral-900/50 px-3.5 py-2.5 text-xs text-neutral-300 hover:bg-neutral-850 hover:text-white transition"
+          className="w-full flex items-center justify-between rounded-xl border border-neutral-800/80 bg-neutral-900/50 px-3.5 py-2.5 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
         >
           <div className="flex items-center gap-2">
             <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -312,6 +330,15 @@ export default function PortalLayout({
           {children}
         </main>
       </div>
+
+      {/* Security & Password Settings Modal */}
+      <SecuritySettingsModal
+        isOpen={securityModalOpen}
+        onClose={() => setSecurityModalOpen(false)}
+        userName={session?.user?.name || "User"}
+        userEmail={session?.user?.email || ""}
+        userRole={session?.user?.role || "STAFF"}
+      />
     </div>
   );
 }

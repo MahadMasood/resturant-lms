@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import PrintCertificateButton from "@/components/ui/PrintCertificateButton";
+import CertificateQrCode from "@/components/ui/CertificateQrCode";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -93,6 +94,8 @@ export default async function CertificatePage({ params }: PageProps) {
   const venueName = certificate.user.tenant?.name || "Accredited Culinary Venue";
   const score = attempt?.score ?? 100;
   const certId = certificate.id;
+  const baseUrl = process.env.NEXTAUTH_URL || "https://lms-portal.com";
+  const verifyUrl = `${baseUrl}/verify?id=${encodeURIComponent(certId)}`;
 
   const dateIssued = new Date(certificate.issuedAt).toLocaleDateString("en-US", {
     year: "numeric",
@@ -216,37 +219,48 @@ export default async function CertificatePage({ params }: PageProps) {
               </span>
             </div>
 
-            {/* Divider */}
+            {/* Divider & Official Accreditation Credentials Footer */}
             <div className="mt-10 w-full border-t border-white/10 pt-6 print:border-neutral-300">
-              <div className="grid grid-cols-2 gap-4 text-left sm:grid-cols-3">
-                {/* Issue Date */}
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                    Date of Accreditation
-                  </p>
-                  <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
-                    {dateIssued}
-                  </p>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-6 text-left">
+                {/* Text Metadata */}
+                <div className="grid grid-cols-2 gap-4 flex-1 w-full">
+                  {/* Issue Date */}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
+                      Date of Accreditation
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
+                      {dateIssued}
+                    </p>
+                  </div>
+
+                  {/* Issuing Authority */}
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
+                      Issuing Authority
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
+                      State Compliance Council
+                    </p>
+                  </div>
+
+                  {/* Verification Token */}
+                  <div className="col-span-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
+                      Digital Verification Hash ID
+                    </p>
+                    <p className="mt-0.5 font-mono text-xs font-medium text-amber-400 print:text-black break-all">
+                      {certId}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Verification Token */}
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                    Verification ID
-                  </p>
-                  <p className="mt-0.5 font-mono text-xs font-medium text-amber-400 print:text-black truncate">
-                    {certId}
-                  </p>
-                </div>
-
-                {/* Authentication Authority */}
-                <div className="col-span-2 sm:col-span-1 sm:text-right">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                    Issuing Authority
-                  </p>
-                  <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
-                    State Compliance Council
-                  </p>
+                {/* Scannable Vector QR Code */}
+                <div className="flex flex-col items-center sm:items-end shrink-0">
+                  <CertificateQrCode value={verifyUrl} size={92} />
+                  <span className="mt-1.5 text-[9px] font-medium tracking-wider uppercase text-neutral-400 print:text-neutral-600">
+                    Scan to Verify
+                  </span>
                 </div>
               </div>
             </div>

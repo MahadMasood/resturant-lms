@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import CssSlab from "./CssSlab";
 import CtaButton from "./CtaButton";
+import HomeReserveButton from "./HomeReserveButton";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -58,7 +59,10 @@ export default function FinalCta() {
           transition={{ duration: 1, ease: EASE, delay: 0.3 }}
           className="mt-9 flex flex-wrap items-center justify-center gap-3"
         >
-          <CtaButton href="#story">Replay the story</CtaButton>
+          <HomeReserveButton variant="final">
+            Reserve a Slab Kit
+          </HomeReserveButton>
+          <CtaButton href="#story" variant="ghost">Replay the story</CtaButton>
           <CtaButton href="/login" variant="ghost">
             Restaurant sign in
           </CtaButton>

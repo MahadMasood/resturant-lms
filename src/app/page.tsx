@@ -17,6 +17,7 @@ import CloserLook from "@/components/home/CloserLook";
 import DishesRail from "@/components/home/DishesRail";
 import GoldenRules from "@/components/home/GoldenRules";
 import FinalCta from "@/components/home/FinalCta";
+import HomeReserveButton from "@/components/home/HomeReserveButton";
 
 export const metadata: Metadata = {
   title: "Himalayan Reserves — Hand-Carved Himalayan Salt Slabs for Cooking",
@@ -64,7 +65,8 @@ export default function HomePage() {
             ))}
           </div>
 
-          <div className="col-start-3 justify-self-end">
+          <div className="col-start-3 justify-self-end flex items-center gap-3">
+            <HomeReserveButton />
             <Suspense fallback={<SignInLink />}>
               <AccountLink />
             </Suspense>

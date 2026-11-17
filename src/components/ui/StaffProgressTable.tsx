@@ -90,6 +90,8 @@ export default function StaffProgressTable() {
     return () => clearInterval(interval);
   }, [fetchProgress]);
 
+  const [offboardingId, setOffboardingId] = useState<string | null>(null);
+
   const handleResetProgress = async (userId: string, name: string) => {
     if (!confirm(`Reset training progress & quiz attempts for ${name}? This will require the staff member to complete the video and quiz again.`)) {
       return;
@@ -108,6 +110,54 @@ export default function StaffProgressTable() {
       alert(String(err));
     } finally {
       setResettingId(null);
+    }
+  };
+
+  const handleOffboardStaff = async (userId: string, name: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to permanently offboard "${name}"? This removes their account, quiz attempts, and certificates.`
+      )
+    ) {
+      return;
+    }
+
+    setOffboardingId(userId);
+    try {
+      const res = await fetch(`/api/manager/staff/${userId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to offboard staff member");
+      await fetchProgress();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOffboardingId(null);
+    }
+  };
+
+  const handleResetPassword = async (userId: string, name: string) => {
+    const customPass = prompt(`Enter a new temporary password for ${name} (or leave blank for "Salt2026!"):`);
+    if (customPass === null) return;
+
+    const newPassword = customPass.trim() || "Salt2026!";
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/manager/staff/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset password");
+      alert(`Password updated for ${name}.\nTemporary password: ${data.temporaryPassword}`);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -355,16 +405,33 @@ export default function StaffProgressTable() {
                       )}
                     </td>
 
-                    {/* Actions: Re-assign / Reset */}
+                    {/* Actions: Password Reset / Re-assign / Offboard */}
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleResetProgress(staff.userId, staff.name)}
-                        disabled={resettingId === staff.userId}
-                        title="Reset progress to allow staff member to retake course"
-                        className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-neutral-700 hover:text-white transition disabled:opacity-50"
-                      >
-                        {resettingId === staff.userId ? "Resetting..." : "Re-assign"}
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleResetPassword(staff.userId, staff.name)}
+                          title="Reset temporary password for this staff member"
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-amber-500/40 hover:text-amber-300 transition"
+                        >
+                          Password
+                        </button>
+                        <button
+                          onClick={() => handleResetProgress(staff.userId, staff.name)}
+                          disabled={resettingId === staff.userId}
+                          title="Reset progress to allow staff member to retake course"
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-neutral-700 hover:text-white transition disabled:opacity-50"
+                        >
+                          {resettingId === staff.userId ? "Resetting..." : "Re-assign"}
+                        </button>
+                        <button
+                          onClick={() => handleOffboardStaff(staff.userId, staff.name)}
+                          disabled={offboardingId === staff.userId}
+                          title="Permanently remove staff member and revoke access"
+                          className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-red-400/80 hover:border-red-500/40 hover:bg-red-950/30 hover:text-red-300 transition disabled:opacity-50"
+                        >
+                          {offboardingId === staff.userId ? "Removing..." : "Remove"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

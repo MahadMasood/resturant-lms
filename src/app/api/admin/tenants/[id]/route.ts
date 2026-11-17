@@ -42,7 +42,10 @@ export async function DELETE(
     // 3. Delete users in this tenant
     await tx.user.deleteMany({ where: { tenantId: id } });
 
-    // 4. Delete tenant
+    // 4. Delete equipment in this tenant
+    await tx.equipmentItem.deleteMany({ where: { tenantId: id } });
+
+    // 5. Delete tenant
     await tx.tenant.delete({ where: { id } });
   });
 
