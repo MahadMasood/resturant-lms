@@ -47,7 +47,7 @@ export async function GET() {
       quizPassed,
       quizScore: latestAttempt?.score ?? null,
       attemptsCount: m.quizAttempts.length,
-      certificateUrl: cert?.pdfUrl ?? null,
+      certificateUrl: cert ? `/certificates/${cert.id}` : null,
       isLocked,
       requiredPreviousTitle: i > 0 && isLocked ? modules[i - 1].title : null,
     });

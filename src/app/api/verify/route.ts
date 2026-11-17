@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     certificate: {
       id: certificate.id,
       issuedAt: certificate.issuedAt,
-      pdfUrl: certificate.pdfUrl,
+      pdfUrl: `/certificates/${certificate.id}`,
       recipientName: certificate.user.name,
       recipientEmail: maskEmail(certificate.user.email),
       venueName: certificate.user.tenant?.name || "Accredited Venue",

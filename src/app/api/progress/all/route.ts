@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     })),
     certificates: u.certificates.map((c: any) => ({
       moduleId: c.moduleId,
-      pdfUrl: c.pdfUrl,
+      pdfUrl: `/certificates/${c.id}`,
       issuedAt: c.issuedAt,
     })),
   }));

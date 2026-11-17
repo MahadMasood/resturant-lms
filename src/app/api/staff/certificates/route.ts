@@ -19,7 +19,7 @@ export async function GET() {
       id: c.id,
       moduleId: c.moduleId,
       moduleName: c.module.title,
-      pdfUrl: c.pdfUrl,
+      pdfUrl: `/certificates/${c.id}`,
       issuedAt: c.issuedAt,
     }))
   );

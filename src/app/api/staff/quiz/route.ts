@@ -1,27 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
-
-function escapeHtml(str: string): string {
-  return str.replace(/[&<>"']/g, (m) => {
-    switch (m) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case '"':
-        return "&quot;";
-      case "'":
-        return "&#39;";
-      default:
-        return m;
-    }
-  });
-}
 
 // GET /api/staff/quiz?moduleId=xxx
 export async function GET(req: NextRequest) {
@@ -123,7 +102,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 4. Generate Certificate if Passed
+  // 4. Generate Digital Certificate if Passed
   let certificateUrl: string | null = null;
   if (passed) {
     const existingCert = await prisma.certificate.findUnique({
@@ -131,77 +110,24 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingCert) {
-      certificateUrl = existingCert.pdfUrl;
+      certificateUrl = existingCert.pdfUrl.startsWith("/certificates/")
+        ? existingCert.pdfUrl
+        : `/certificates/${existingCert.id}`;
     } else {
-      const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-      const moduleRecord = await prisma.module.findUnique({ where: { id: moduleId } });
-
-      const userName = user?.name || "Staff Member";
-      const moduleName = moduleRecord?.title || "Food Safety Protocols";
       const issuedAt = new Date();
-      const dateStr = issuedAt.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-      const certId = `CERT-${Math.random().toString(36).substring(2, 9).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-
-      const safeUserName = escapeHtml(userName);
-      const safeModuleName = escapeHtml(moduleName);
-      const safeDateStr = escapeHtml(dateStr);
-      const safeCertId = escapeHtml(certId);
-
-      const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Certificate of Accreditation — ${safeUserName}</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #18181b; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; margin: 0; }
-  .controls { margin-bottom: 24px; display: flex; gap: 12px; }
-  .print-btn { background: #0071e3; color: white; border: none; padding: 10px 24px; border-radius: 9999px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 113, 227, 0.4); }
-  .cert-container { background: #ffffff; width: 100%; max-width: 860px; padding: 64px 72px; border-radius: 28px; box-shadow: 0 25px 70px rgba(0,0,0,0.45); position: relative; overflow: hidden; }
-  .emblem { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 14px; background: #09090b; color: #ffffff; margin-bottom: 16px; font-weight: bold; }
-  .title { font-size: 36px; font-weight: 700; color: #09090b; letter-spacing: -0.02em; margin-top: 12px; }
-  .recipient-name { font-size: 32px; font-weight: 700; color: #0071e3; margin: 16px 0; }
-  .score-badge { display: inline-block; padding: 4px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; border-radius: 9999px; font-size: 13px; font-weight: 600; }
-</style>
-</head>
-<body>
-  <div class="controls"><button onclick="window.print()" class="print-btn">Print / Save PDF</button></div>
-  <div class="cert-container" style="text-align: center;">
-    <div class="emblem">&#10003;</div>
-    <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.15em; color: #71717a; font-weight: 700;">Hospitality Compliance Council</div>
-    <div class="title">Certificate of Accreditation</div>
-    <p style="color: #71717a; margin-top: 16px;">This officially certifies that</p>
-    <div class="recipient-name">${safeUserName}</div>
-    <p style="color: #3f3f46; max-width: 580px; margin: 0 auto; line-height: 1.6;">
-      has successfully completed all anti-cheat verified video training and achieved passing accreditation in <strong>${safeModuleName}</strong>.
-    </p>
-    <div style="margin: 28px 0;"><span class="score-badge">Evaluation Score: ${score}% (Passed)</span></div>
-    <div style="border-top: 1px solid #e4e4e7; padding-top: 20px; font-size: 12px; color: #71717a; display: flex; justify-content: space-between;">
-      <span>Date Issued: ${safeDateStr}</span>
-      <span>Verification ID: ${safeCertId}</span>
-    </div>
-  </div>
-</body>
-</html>`;
-
-      const certDir = path.join(process.cwd(), "public", "certificates");
-      if (!fs.existsSync(certDir)) fs.mkdirSync(certDir, { recursive: true });
-
-      const certFilename = `cert-${session.user.id}-${moduleId}.html`;
-      fs.writeFileSync(path.join(certDir, certFilename), html, "utf-8");
-
-      certificateUrl = `/certificates/${certFilename}`;
-
-      await prisma.certificate.create({
+      const newCert = await prisma.certificate.create({
         data: {
           userId: session.user.id,
           moduleId,
-          pdfUrl: certificateUrl,
+          pdfUrl: `/certificates/${session.user.id}-${moduleId}`,
           issuedAt,
         },
+      });
+
+      certificateUrl = `/certificates/${newCert.id}`;
+      await prisma.certificate.update({
+        where: { id: newCert.id },
+        data: { pdfUrl: certificateUrl },
       });
     }
   }

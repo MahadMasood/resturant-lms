@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
             : 0;
 
         const attempt = s.quizAttempts.find((qa: { moduleId: string; score: number; passed: boolean }) => qa.moduleId === wp.moduleId);
-        const cert = s.certificates.find((c: { moduleId: string; pdfUrl: string; issuedAt: Date }) => c.moduleId === wp.moduleId);
+        const cert = s.certificates.find((c: { id: string; moduleId: string; pdfUrl: string; issuedAt: Date }) => c.moduleId === wp.moduleId);
 
         rows.push([
           sanitizeCsvCell(tenantName),
@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
           sanitizeCsvCell(wp.completed ? "Yes" : "No"),
           sanitizeCsvCell(attempt ? `${attempt.score}%` : "Not Attempted"),
           sanitizeCsvCell(attempt && attempt.passed ? "Yes" : "No"),
-          sanitizeCsvCell(cert ? cert.pdfUrl : "N/A"),
+          sanitizeCsvCell(cert ? `/certificates/${cert.id}` : "N/A"),
           sanitizeCsvCell(cert ? new Date(cert.issuedAt).toISOString().split("T")[0] : "N/A"),
         ]);
       }
