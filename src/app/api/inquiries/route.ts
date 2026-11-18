@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, email, purpose, kitType, city, notes } = body;
+    const { name, email, phone, purpose, kitType, city, notes } = body;
 
-    if (!name || !email || !kitType) {
+    if (!name || !email) {
       return NextResponse.json(
-        { error: "Name, email, and preferred kit are required." },
+        { error: "Name and email are required." },
         { status: 400 }
       );
     }
@@ -25,15 +25,16 @@ export async function POST(req: Request) {
     const timestamp = Date.now().toString(36).toUpperCase();
     const referenceCode = `HIM-${timestamp}-${suffix}`;
 
-    console.log(`[SLAB INQUIRY RESERVED] ${referenceCode} - ${name} (${email}) - ${kitType} - ${purpose} - ${city || "N/A"}`);
+    console.log(`[SLAB INQUIRY RESERVED] ${referenceCode} - ${name} (${email}, Phone: ${phone || "N/A"}) - ${kitType || "General Reserve"} - ${city || "N/A"}`);
 
     return NextResponse.json({
       success: true,
       referenceCode,
       name,
       email,
-      kitType,
-      purpose,
+      phone: phone || null,
+      kitType: kitType || "The Master Searing Set",
+      purpose: purpose || null,
       city: city || null,
       notes: notes || null,
       message: "Your Himalayan salt slab allocation has been registered successfully.",
