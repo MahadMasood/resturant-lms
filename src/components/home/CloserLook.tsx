@@ -5,6 +5,7 @@ import type { PointerEvent } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence, motion, useInView } from "framer-motion";
 import type { DragState, SetPiece } from "./CloserLookCanvas";
+import HomeReserveButton from "./HomeReserveButton";
 
 const CloserLookCanvas = dynamic(() => import("./CloserLookCanvas"), { ssr: false });
 
@@ -206,6 +207,20 @@ export default function CloserLook() {
             <div>
               <h3 className="text-2xl font-semibold tracking-[-0.02em] text-white sm:text-3xl">{info.title}</h3>
               <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-neutral-400">{info.body}</p>
+              <div className="mt-6 flex items-center gap-3">
+                <HomeReserveButton
+                  variant="hero"
+                  defaultKit={
+                    piece === "slab"
+                      ? "The Master Searing Set"
+                      : piece === "platter"
+                      ? "Dual Temperature Presentation Set"
+                      : "The Master Searing Set"
+                  }
+                >
+                  Reserve {info.label} Set
+                </HomeReserveButton>
+              </div>
             </div>
             <dl className="grid grid-cols-2 gap-3">
               {info.specs.map(([value, label]) => (

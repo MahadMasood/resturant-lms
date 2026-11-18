@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, useInView, useMotionValue, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import CssSlab from "./CssSlab";
+import HomeReserveButton from "./HomeReserveButton";
 
 const DishesCanvas = dynamic(() => import("./DishesCanvas"), { ssr: false });
 
@@ -139,6 +140,15 @@ export default function DishesRail() {
           <div className="h-px overflow-hidden bg-white/10">
             <motion.div style={{ scaleX: scrollYProgress }} className="h-full origin-left bg-linear-to-r from-rose-400 to-amber-300" />
           </div>
+        </div>
+
+        <div className="mx-auto mt-10 flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl px-5 sm:px-6">
+          <p className="text-xs sm:text-sm text-neutral-400 text-center sm:text-left">
+            Ready to sear, chill, and serve at your own dining table?
+          </p>
+          <HomeReserveButton variant="pill">
+            Reserve a Table Searing Set
+          </HomeReserveButton>
         </div>
       </div>
     </section>

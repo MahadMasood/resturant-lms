@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -66,16 +68,34 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-950 p-4">
       <div className="w-full max-w-sm space-y-6">
-        {/* Logo / Title */}
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
-            <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-              <path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2zm0 13.5l-7-3.18V17l7 3.5 7-3.5v-4.68l-7 3.18z" />
+        {/* Back to Home Navigation Link */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-neutral-400 backdrop-blur-md transition hover:border-white/20 hover:bg-white/10 hover:text-white"
+          >
+            <svg className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">LMS Pro Portal</h1>
+            <span>Back to Himalayan Reserves</span>
+          </Link>
+        </div>
+
+        {/* Brand Header */}
+        <div className="text-center">
+          <Link href="/" className="inline-block group mb-3">
+            <Image
+              src="/logo-mark.png"
+              alt="Himalayan Reserves"
+              width={438}
+              height={148}
+              priority
+              className="mx-auto h-7 w-auto transition-transform duration-300 group-hover:scale-105"
+            />
+          </Link>
+          <h1 className="text-xl font-bold text-white tracking-tight">Restaurant Portal</h1>
           <p className="mt-1 text-xs text-neutral-400">
-            Multi-Tenant Enterprise Restaurant Training & Accreditation
+            Sign in to access culinary modules and compliance certification
           </p>
         </div>
 
@@ -147,6 +167,17 @@ export default function LoginPage() {
             {loading ? "Verifying Credentials..." : "Sign In to Portal"}
           </button>
         </form>
+
+        {/* Back to Home bottom link */}
+        <div className="text-center pt-2">
+          <Link
+            href="/"
+            className="text-xs text-neutral-400 hover:text-rose-300 transition-colors inline-flex items-center gap-1"
+          >
+            <span>Looking for our artisan salt slabs?</span>
+            <span className="font-semibold text-white hover:underline">Return to Home &rarr;</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

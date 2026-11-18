@@ -24,6 +24,7 @@ import {
 import type { ChapterKey } from "./storyTimeline";
 import type { PlaceCallout } from "./HeroStoryCanvas";
 import CtaButton from "./CtaButton";
+import HomeReserveButton from "./HomeReserveButton";
 import { paintSlabCanvases } from "./saltPaint";
 
 const HeroStoryCanvas = dynamic(() => import("./HeroStoryCanvas"), { ssr: false });
@@ -187,7 +188,10 @@ export default function HeroStory() {
               transition={{ duration: 1, ease: EASE, delay: 1.05 }}
               className="pointer-events-auto flex flex-wrap items-center justify-center gap-3"
             >
-              <CtaButton href="#closer-look">Take a closer look</CtaButton>
+              <HomeReserveButton variant="hero">
+                Reserve a Slab Kit
+              </HomeReserveButton>
+              <CtaButton href="#closer-look" variant="ghost">Take a closer look</CtaButton>
               <CtaButton href="#science" variant="ghost">
                 Why it tastes better
               </CtaButton>

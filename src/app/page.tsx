@@ -18,6 +18,7 @@ import DishesRail from "@/components/home/DishesRail";
 import GoldenRules from "@/components/home/GoldenRules";
 import FinalCta from "@/components/home/FinalCta";
 import HomeReserveButton from "@/components/home/HomeReserveButton";
+import { ReserveModalProvider } from "@/components/home/ReserveModalContext";
 
 export const metadata: Metadata = {
   title: "Himalayan Reserves — Hand-Carved Himalayan Salt Slabs for Cooking",
@@ -36,43 +37,44 @@ const NAV_LINKS = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-black text-white antialiased selection:bg-rose-500 selection:text-white">
-      <ScrollProgressBar />
+    <ReserveModalProvider>
+      <div className="min-h-screen overflow-x-clip bg-black text-white antialiased selection:bg-rose-500 selection:text-white">
+        <ScrollProgressBar />
 
-      {/* ─── Navigation ─────────────────────────────────────────────────── */}
-      <header className="fixed inset-x-0 top-0 z-50 h-11 border-b border-white/10 bg-black/60 backdrop-blur-xl backdrop-saturate-150">
-        <nav className="mx-auto grid h-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
-          <Link href="/" aria-label="The Himalayan Reserve, home" className="group col-start-1 flex items-center gap-3 justify-self-start">
-            <Image
-              src="/logo-mark.png"
-              alt=""
-              width={438}
-              height={148}
-              priority
-              className="h-6 w-auto transition-[transform,filter] duration-500 ease-out group-hover:scale-105 group-hover:drop-shadow-[0_0_10px_rgba(232,141,130,0.55)]"
-            />
-            <span aria-hidden className="hidden h-4 w-px bg-white/20 sm:block" />
-            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-300 transition-colors duration-300 group-hover:text-white sm:block">
-              The Himalayan Reserve
-            </span>
-          </Link>
+        {/* ─── Navigation ─────────────────────────────────────────────────── */}
+        <header className="fixed inset-x-0 top-0 z-50 h-11 border-b border-white/10 bg-black/60 backdrop-blur-xl backdrop-saturate-150">
+          <nav className="mx-auto grid h-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+            <Link href="/" aria-label="The Himalayan Reserve, home" className="group col-start-1 flex items-center gap-3 justify-self-start">
+              <Image
+                src="/logo-mark.png"
+                alt=""
+                width={438}
+                height={148}
+                priority
+                className="h-6 w-auto transition-[transform,filter] duration-500 ease-out group-hover:scale-105 group-hover:drop-shadow-[0_0_10px_rgba(232,141,130,0.55)]"
+              />
+              <span aria-hidden className="hidden h-4 w-px bg-white/20 sm:block" />
+              <span className="hidden text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-300 transition-colors duration-300 group-hover:text-white sm:block">
+                The Himalayan Reserve
+              </span>
+            </Link>
 
-          <div className="col-start-2 hidden items-center gap-7 text-xs text-neutral-300 lg:flex">
-            {NAV_LINKS.map((link) => (
-              <a key={link.href} href={link.href} className="link-underline transition-colors hover:text-white">
-                {link.label}
-              </a>
-            ))}
-          </div>
+            <div className="col-start-2 hidden items-center gap-7 text-xs text-neutral-300 lg:flex">
+              {NAV_LINKS.map((link) => (
+                <a key={link.href} href={link.href} className="link-underline transition-colors hover:text-white">
+                  {link.label}
+                </a>
+              ))}
+            </div>
 
-          <div className="col-start-3 justify-self-end flex items-center gap-3">
-            <HomeReserveButton />
-            <Suspense fallback={<SignInLink />}>
-              <AccountLink />
-            </Suspense>
-          </div>
-        </nav>
-      </header>
+            <div className="col-start-3 justify-self-end flex items-center gap-3">
+              <HomeReserveButton variant="nav">Reserve a Slab</HomeReserveButton>
+              <Suspense fallback={<SignInLink />}>
+                <AccountLink />
+              </Suspense>
+            </div>
+          </nav>
+        </header>
 
       <main>
         <HeroStory />
@@ -102,6 +104,7 @@ export default function HomePage() {
             <FooterColumn
               title="The slab"
               links={[
+                ["#reserve", "Reserve your slab set"],
                 ["#story", "250 million years"],
                 ["#story", "84 trace minerals"],
                 ["#science", "Why it tastes better"],
@@ -141,6 +144,7 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
+  </ReserveModalProvider>
   );
 }
 
