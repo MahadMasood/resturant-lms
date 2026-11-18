@@ -378,7 +378,11 @@ export default function ModuleEditorModal({
                 <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
                   Video Source
                 </label>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold text-orange-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+                    Cloudflare R2 Storage
+                  </span>
                   <button
                     type="button"
                     onClick={() => setVideoSourceType("url")}
@@ -405,13 +409,23 @@ export default function ModuleEditorModal({
               </div>
 
               {videoSourceType === "url" ? (
-                <input
-                  type="text"
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="/videos/module1-safety-protocols.mp4"
-                  className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-indigo-500"
-                />
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    placeholder="/videos/module1-safety-protocols.mp4"
+                    className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-indigo-500"
+                  />
+                  {videoUrl.includes("r2.dev") || videoUrl.includes("r2.cloudflarestorage.com") ? (
+                    <p className="text-[11px] text-orange-400 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>Streamed via Cloudflare R2 Global Edge CDN</span>
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-neutral-700 bg-neutral-800/40 p-4 text-center">
                   <input
@@ -429,11 +443,11 @@ export default function ModuleEditorModal({
                     <div className="mt-3 space-y-1">
                       <div className="h-1.5 w-full bg-neutral-700 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-indigo-500 transition-all duration-300"
+                          className="h-full bg-orange-500 transition-all duration-300"
                           style={{ width: `${uploadingProgress}%` }}
                         />
                       </div>
-                      <p className="text-[11px] text-neutral-400">Uploading: {uploadingProgress}%</p>
+                      <p className="text-[11px] text-orange-400">Streaming to Cloudflare R2: {uploadingProgress}%</p>
                     </div>
                   )}
                 </div>
