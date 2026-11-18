@@ -28,15 +28,29 @@ interface QuizResult {
   passed: boolean;
   correctCount: number;
   totalQuestions: number;
-  missedQuestionIds: string[];
+  attemptsRemaining: number;
   certificateUrl: string | null;
+}
+
+interface QuizStatus {
+  attemptsRemaining: number;
+  attemptsPerDay: number;
+  nextAttemptAt: string | null;
+  quizEligible: boolean;
+  alreadyCertified: boolean;
+  certificateUrl: string | null;
+}
+
+function formatWhen(iso: string | null): string {
+  if (!iso) return "later";
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" });
 }
 
 const PASS_THRESHOLD = 90;
 
 function QuizContent() {
   const searchParams = useSearchParams();
-  const moduleId = searchParams.get("moduleId") || "module-food-safety";
+  const moduleId = searchParams.get("moduleId") || "";
 
   const [moduleInfo, setModuleInfo] = useState<ModuleInfo | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -50,26 +64,55 @@ function QuizContent() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [status, setStatus] = useState<QuizStatus | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`/api/staff/quiz?moduleId=${encodeURIComponent(moduleId)}`)
-      .then((r) => r.json())
+    let active = true;
+    const request = moduleId
+      ? fetch(`/api/staff/quiz?moduleId=${encodeURIComponent(moduleId)}`).then((r) => r.json())
+      : Promise.resolve({ error: "No module selected. Open a quiz from your training dashboard." });
+
+    request
       .then((data) => {
+        if (!active) return;
         if (data.error) {
           setError(data.error);
         } else {
           setQuestions(Array.isArray(data.questions) ? data.questions : []);
           setModuleInfo(data.module || null);
           setPastAttempts(Array.isArray(data.pastAttempts) ? data.pastAttempts : []);
+          setStatus({
+            attemptsRemaining: data.attemptsRemaining ?? 0,
+            attemptsPerDay: data.attemptsPerDay ?? 3,
+            nextAttemptAt: data.nextAttemptAt ?? null,
+            quizEligible: Boolean(data.quizEligible),
+            alreadyCertified: Boolean(data.alreadyCertified),
+            certificateUrl: data.certificateUrl ?? null,
+          });
         }
         setLoading(false);
       })
       .catch(() => {
+        if (!active) return;
         setError("Failed to load evaluation questions.");
         setLoading(false);
       });
+
+    return () => {
+      active = false;
+    };
   }, [moduleId]);
+
+  // Why the quiz can't be taken right now, if it can't.
+  const blockedReason = !status
+    ? null
+    : status.alreadyCertified
+    ? "certified"
+    : !status.quizEligible
+    ? "video"
+    : status.attemptsRemaining === 0
+    ? "attempts"
+    : null;
 
   const handleSelect = (qId: string, optIdx: number) => {
     if (submitted) return;
@@ -96,13 +139,10 @@ function QuizContent() {
 
       const data = await res.json();
 
-      if (res.status === 403) {
-        setError(data.error || "Anti-cheat: You must watch at least 80% of the training video before evaluation.");
-        setSubmitting(false);
-        return;
-      }
-
       if (!res.ok) {
+        if (data.attemptsRemaining !== undefined) {
+          setStatus((prev) => (prev ? { ...prev, ...data } : prev));
+        }
         throw new Error(data.error || "Failed to submit evaluation.");
       }
 
@@ -111,9 +151,10 @@ function QuizContent() {
         passed: data.passed ?? false,
         correctCount: data.correctCount ?? 0,
         totalQuestions: data.totalQuestions ?? questions.length,
-        missedQuestionIds: Array.isArray(data.missedQuestionIds) ? data.missedQuestionIds : [],
+        attemptsRemaining: data.attemptsRemaining ?? 0,
         certificateUrl: data.certificateUrl ?? null,
       });
+      setStatus((prev) => (prev ? { ...prev, attemptsRemaining: data.attemptsRemaining ?? 0 } : prev));
 
       setSubmitted(true);
     } catch (err: unknown) {
@@ -217,7 +258,8 @@ function QuizContent() {
               Official Compliance Evaluation
             </span>
             <span className="text-xs text-neutral-400 font-mono">
-              Strict 90% Passing Threshold
+              90% to pass
+              {status && !status.alreadyCertified && ` · ${status.attemptsRemaining} of ${status.attemptsPerDay} attempts left today`}
             </span>
           </div>
 
@@ -284,8 +326,44 @@ function QuizContent() {
           </div>
         )}
 
+        {/* Quiz unavailable right now */}
+        {!submitted && blockedReason && status && (
+          <div className="rounded-3xl border border-amber-500/30 bg-amber-950/20 p-6 md:p-8 space-y-3">
+            <h2 className="text-base font-bold text-white">
+              {blockedReason === "certified"
+                ? "You're already certified for this module"
+                : blockedReason === "video"
+                ? "Watch the training video first"
+                : "No attempts left today"}
+            </h2>
+            <p className="text-xs md:text-sm text-neutral-300 leading-relaxed">
+              {blockedReason === "certified"
+                ? "Your certificate is still valid. You can take this quiz again once it expires."
+                : blockedReason === "video"
+                ? "You need to watch at least 80% of the training video before the quiz unlocks."
+                : `You've used all ${status.attemptsPerDay} attempts for the last 24 hours. Re-watch the video and try again ${formatWhen(status.nextAttemptAt)}.`}
+            </p>
+            <div className="flex flex-wrap gap-3 pt-1">
+              {blockedReason === "certified" && status.certificateUrl && (
+                <Link
+                  href={status.certificateUrl}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+                >
+                  View certificate
+                </Link>
+              )}
+              <Link
+                href="/dashboard/staff"
+                className="rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2 text-xs font-semibold text-neutral-200 hover:bg-neutral-700 transition"
+              >
+                Back to training
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Active Question Card */}
-        {!submitted && currentQ && (
+        {!submitted && !blockedReason && currentQ && (
           <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-8 space-y-6 shadow-xl transition-all">
             <div className="space-y-2">
               <div className="text-[11px] font-mono uppercase tracking-wider text-blue-400 font-semibold">
@@ -371,7 +449,7 @@ function QuizContent() {
         )}
 
         {/* Global Submit Banner (available whenever all answered) */}
-        {!submitted && questions.length > 0 && currentIdx < questions.length - 1 && (
+        {!submitted && !blockedReason && questions.length > 0 && currentIdx < questions.length - 1 && (
           <div className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-neutral-950 p-4">
             <span className="text-xs text-neutral-400">
               {allAnswered ? (
@@ -462,7 +540,7 @@ function QuizContent() {
                   Return to Dashboard
                 </Link>
 
-                {!result.passed && (
+                {!result.passed && result.attemptsRemaining > 0 && (
                   <button
                     onClick={handleRetake}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-600/25"
@@ -476,52 +554,16 @@ function QuizContent() {
               </div>
             </div>
 
-            {/* Detailed Missed Questions Review Section (If Failed) */}
-            {!result.passed && result.missedQuestionIds.length > 0 && (
-              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-8 space-y-6">
-                <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-                  <div>
-                    <h3 className="text-base font-bold text-white">Review Needed Areas</h3>
-                    <p className="text-xs text-neutral-400 mt-0.5">
-                      You missed {result.missedQuestionIds.length} question{result.missedQuestionIds.length > 1 ? "s" : ""}. Review the concepts before retaking.
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-red-950 border border-red-500/30 px-2.5 py-0.5 text-xs font-mono font-semibold text-red-400">
-                    {result.missedQuestionIds.length} Incorrect
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  {questions
-                    .filter((q) => result.missedQuestionIds.includes(q.id))
-                    .map((q, idx) => {
-                      const userChoiceIdx = answers[q.id];
-                      const userChoiceText = userChoiceIdx !== undefined ? q.options[userChoiceIdx] : "Unanswered";
-
-                      return (
-                        <div
-                          key={q.id}
-                          className="rounded-2xl border border-neutral-800 bg-neutral-950/70 p-5 space-y-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <h4 className="text-sm font-semibold text-neutral-200">
-                              <span className="text-neutral-500 font-mono mr-2">Review #{idx + 1}:</span>
-                              {q.questionText}
-                            </h4>
-                          </div>
-
-                          <div className="rounded-xl border border-red-500/20 bg-red-950/20 p-3 text-xs text-red-300">
-                            <span className="font-semibold text-neutral-400">Your Answer: </span>
-                            {userChoiceText}
-                          </div>
-
-                          <p className="text-[11px] text-neutral-500 italic">
-                            Tip: Re-watch the corresponding segment in the training video to clarify temperature, handling, and protocol guidelines.
-                          </p>
-                        </div>
-                      );
-                    })}
-                </div>
+            {/* Which answers were wrong is not shown: with retries that would reveal the answers. */}
+            {!result.passed && (
+              <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-8 space-y-2">
+                <h3 className="text-base font-bold text-white">Before you try again</h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Re-watch the training video, paying attention to temperatures, handling and protocol steps.{" "}
+                  {result.attemptsRemaining > 0
+                    ? `You have ${result.attemptsRemaining} attempt${result.attemptsRemaining === 1 ? "" : "s"} left today.`
+                    : `You've used today's attempts. You can try again ${formatWhen(status?.nextAttemptAt ?? null)}.`}
+                </p>
               </div>
             )}
           </div>

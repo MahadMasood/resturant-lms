@@ -1,89 +1,79 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { api, ApiError, parseBody, parseWith } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { evaluateProgress, isVideoCompleted, requireModuleAccess } from "@/lib/training";
+import { idSchema } from "@/lib/validation";
+
+const seconds = z.number().finite().min(0).max(24 * 60 * 60);
+
+// Any durationSeconds the browser sends is ignored: the module's stored
+// duration is the only one that counts.
+const progressSchema = z.object({
+  moduleId: idSchema,
+  watchedSeconds: seconds,
+  maxWatchedSeconds: seconds.optional(),
+});
 
 // GET /api/progress?moduleId=xxx
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const GET = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["STAFF"] });
+  const moduleId = parseWith(idSchema, req.nextUrl.searchParams.get("moduleId"));
+  const state = await requireModuleAccess(user, moduleId);
 
-  const moduleId = req.nextUrl.searchParams.get("moduleId");
-  if (!moduleId) return NextResponse.json({ error: "moduleId required" }, { status: 400 });
-
-  const record = await prisma.watchProgress.findUnique({
-    where: { userId_moduleId: { userId: session.user.id, moduleId } },
-  });
-
-  const watched = record?.watchedSeconds ?? 0;
-  const dur = record?.durationSeconds ?? 0;
-  const percentWatched = dur > 0 ? Math.round((watched / dur) * 100) : 0;
-
+  const duration = state.durationSeconds ?? 0;
   return NextResponse.json({
-    watchedSeconds: watched,
-    maxWatchedSeconds: watched,
-    durationSeconds: dur,
-    percentWatched,
-    completed: record?.completed ?? false,
+    watchedSeconds: state.watchedSeconds,
+    maxWatchedSeconds: state.maxWatchedSeconds,
+    durationSeconds: duration,
+    percentWatched: duration > 0 ? Math.min(100, Math.round((state.maxWatchedSeconds / duration) * 100)) : 0,
+    completed: state.completed,
   });
-}
+});
 
 // POST /api/progress
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["STAFF"] });
+  const body = await parseBody(req, progressSchema);
+  const state = await requireModuleAccess(user, body.moduleId);
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const moduleId = typeof body.moduleId === "string" ? body.moduleId : null;
-  const watchedSeconds = Number(body.watchedSeconds);
-  const durationSeconds = Number(body.durationSeconds) || 38;
-  const maxWatchedSeconds = Number(body.maxWatchedSeconds ?? body.watchedSeconds);
-
-  if (!moduleId || !Number.isFinite(watchedSeconds)) {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
-  // Anti-skip: load existing high-water mark
   const existing = await prisma.watchProgress.findUnique({
-    where: { userId_moduleId: { userId: session.user.id, moduleId } },
+    where: { userId_moduleId: { userId: user.id, moduleId: body.moduleId } },
   });
 
-  const storedMax = existing?.watchedSeconds ?? 0;
-  const TOLERANCE = 12; // seconds of network jitter allowance
+  const reported = Math.max(body.watchedSeconds, body.maxWatchedSeconds ?? 0);
+  const now = new Date();
+  const decision = evaluateProgress(existing, reported, now);
 
-  if (maxWatchedSeconds > storedMax + TOLERANCE) {
-    return NextResponse.json(
-      {
-        error: "Skip detected",
-        lastConfirmedSeconds: storedMax,
-      },
-      { status: 422 }
-    );
+  if (!decision.accepted) {
+    throw new ApiError(422, "Skip detected", { lastConfirmedSeconds: decision.maxWatchedSeconds });
   }
 
-  const newMax = Math.max(storedMax, watchedSeconds);
-  const completed = newMax >= durationSeconds * 0.95;
+  const moduleDuration = state.durationSeconds;
+  const maxWatchedSeconds = moduleDuration ? Math.min(decision.maxWatchedSeconds, moduleDuration) : decision.maxWatchedSeconds;
+  const completed = (existing?.completed ?? false) || isVideoCompleted(maxWatchedSeconds, moduleDuration);
+  const data = {
+    watchedSeconds: Math.min(body.watchedSeconds, maxWatchedSeconds),
+    maxWatchedSeconds,
+    durationSeconds: moduleDuration ?? 0,
+    completed,
+    segmentStartedAt: decision.segmentStartedAt,
+    segmentStartSeconds: decision.segmentStartSeconds,
+  };
 
-  const record = await prisma.watchProgress.upsert({
-    where: { userId_moduleId: { userId: session.user.id, moduleId } },
-    update: {
-      watchedSeconds: newMax,
-      durationSeconds,
-      completed,
-    },
-    create: {
-      userId: session.user.id,
-      moduleId,
-      watchedSeconds: newMax,
-      durationSeconds,
-      completed,
-    },
+  await prisma.watchProgress.upsert({
+    where: { userId_moduleId: { userId: user.id, moduleId: body.moduleId } },
+    update: data,
+    create: { userId: user.id, moduleId: body.moduleId, ...data },
   });
 
-  return NextResponse.json({ ok: true, watchedSeconds: record.watchedSeconds, completed });
-}
+  return NextResponse.json({
+    ok: true,
+    watchedSeconds: maxWatchedSeconds,
+    completed,
+    // The super admin hasn't confirmed this video's length yet, so progress is
+    // saved but the module can't be completed until they do.
+    durationPending: !moduleDuration,
+  });
+});

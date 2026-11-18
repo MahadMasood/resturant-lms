@@ -1,144 +1,132 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { api, ApiError, parseBody, parseWith } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { audit } from "@/lib/audit";
+import {
+  PASS_THRESHOLD,
+  QUIZ_ATTEMPTS_PER_WINDOW,
+  certificatePath,
+  issueCertificate,
+  requireModuleAccess,
+  type StaffModuleState,
+} from "@/lib/training";
+import { idSchema } from "@/lib/validation";
 
-// GET /api/staff/quiz?moduleId=xxx
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const submitSchema = z.object({
+  moduleId: idSchema,
+  answers: z.record(z.string().max(64), z.number().int().min(0).max(10)),
+});
 
-  const moduleId = req.nextUrl.searchParams.get("moduleId");
-  if (!moduleId) return NextResponse.json({ error: "moduleId required" }, { status: 400 });
+function quizStatus(state: StaffModuleState) {
+  return {
+    attemptsRemaining: state.attemptsRemaining,
+    attemptsPerDay: QUIZ_ATTEMPTS_PER_WINDOW,
+    nextAttemptAt: state.nextAttemptAt,
+    quizEligible: state.quizEligible,
+    alreadyCertified: state.certificate?.status === "valid",
+    certificateUrl: state.certificate ? certificatePath(state.certificate.verificationCode) : null,
+  };
+}
 
-  const [module_, questions, pastAttempts] = await Promise.all([
-    prisma.module.findUnique({
-      where: { id: moduleId },
-      select: { id: true, title: true, description: true },
-    }),
+// GET /api/staff/quiz?moduleId=xxx — questions without answers, plus attempt status
+export const GET = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["STAFF"] });
+  const moduleId = parseWith(idSchema, req.nextUrl.searchParams.get("moduleId"));
+  const state = await requireModuleAccess(user, moduleId);
+
+  const [questions, pastAttempts] = await Promise.all([
     prisma.question.findMany({
       where: { moduleId },
       select: { id: true, questionText: true, options: true },
     }),
     prisma.quizAttempt.findMany({
-      where: { userId: session.user.id, moduleId },
+      where: { userId: user.id, moduleId, voidedAt: null },
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { id: true, score: true, passed: true, createdAt: true },
     }),
   ]);
 
-  if (!module_) {
-    return NextResponse.json({ error: "Module not found" }, { status: 404 });
-  }
-
   return NextResponse.json({
-    module: module_,
+    module: { id: state.id, title: state.title, description: state.description },
     questions,
     pastAttempts,
+    passThreshold: PASS_THRESHOLD,
+    ...quizStatus(state),
   });
-}
+});
 
-// POST /api/staff/quiz — evaluated server-side
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "STAFF") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+// POST /api/staff/quiz — graded on the server
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["STAFF"] });
+  const { moduleId, answers } = await parseBody(req, submitSchema);
+  const state = await requireModuleAccess(user, moduleId);
 
-  let body: { moduleId?: string; answers?: Record<string, number> };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  if (!state.durationSeconds) {
+    throw new ApiError(409, "This module's video is still being set up. Please try again later.");
+  }
+  if (!state.quizEligible) {
+    throw new ApiError(403, "Watch at least 80% of the training video before taking the quiz.", {
+      code: "VIDEO_NOT_WATCHED",
+    });
+  }
+  if (state.certificate?.status === "valid") {
+    throw new ApiError(409, "You already hold a valid certificate for this module.", { ...quizStatus(state) });
+  }
+  if (state.attemptsRemaining === 0) {
+    throw new ApiError(429, `You've used all ${QUIZ_ATTEMPTS_PER_WINDOW} attempts for today. Please review the video and try again later.`, {
+      code: "ATTEMPT_LIMIT",
+      ...quizStatus(state),
+    });
   }
 
-  const { moduleId, answers } = body;
-  if (!moduleId || typeof answers !== "object") {
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-  }
-
-  // 1. Verify video completion threshold (at least 80% watched)
-  const progress = await prisma.watchProgress.findUnique({
-    where: { userId_moduleId: { userId: session.user.id, moduleId } },
-  });
-
-  const duration = progress?.durationSeconds || 38;
-  const watched = progress?.watchedSeconds || 0;
-
-  if (!progress || watched < duration * 0.8) {
-    return NextResponse.json(
-      { error: "Anti-cheat: You must verify at least 80% of the training video before evaluation." },
-      { status: 403 }
-    );
-  }
-
-  // 2. Fetch ground-truth questions from DB
   const questions = await prisma.question.findMany({ where: { moduleId } });
   if (questions.length === 0) {
-    return NextResponse.json({ error: "No questions configured for this module" }, { status: 404 });
+    throw new ApiError(404, "No questions configured for this module");
   }
 
-  let correctCount = 0;
-  const missedQuestionIds: string[] = [];
-
-  for (const q of questions) {
-    const userAnswer = answers[q.id];
-    if (userAnswer === q.correctAnswer) {
-      correctCount++;
-    } else {
-      missedQuestionIds.push(q.id);
-    }
-  }
-
+  const correctCount = questions.filter((q) => answers[q.id] === q.correctAnswer).length;
   const score = Math.round((correctCount / questions.length) * 100);
-  const passed = score >= 90; // Strict 90% compliance threshold
+  const passed = score >= PASS_THRESHOLD;
 
-  // 3. Save attempt record
-  const attempt = await prisma.quizAttempt.create({
-    data: {
-      userId: session.user.id,
-      moduleId,
-      score,
-      passed,
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    const attempt = await tx.quizAttempt.create({
+      data: { userId: user.id, moduleId, score, passed, quizVersion: state.quizVersion },
+    });
+    const certificate = passed
+      ? await issueCertificate(tx, {
+          userId: user.id,
+          moduleId,
+          score,
+          quizVersion: state.quizVersion,
+          validityMonths: state.validityMonths,
+        })
+      : null;
+    return { attempt, certificate };
   });
 
-  // 4. Generate Digital Certificate if Passed
-  let certificateUrl: string | null = null;
-  if (passed) {
-    const existingCert = await prisma.certificate.findUnique({
-      where: { userId_moduleId: { userId: session.user.id, moduleId } },
+  if (result.certificate) {
+    await audit(user, {
+      action: "certificate.issued",
+      targetType: "certificate",
+      targetId: result.certificate.id,
+      tenantId: user.tenantId,
+      summary: `${user.name} passed "${state.title}" with ${score}%`,
     });
-
-    if (existingCert) {
-      certificateUrl = existingCert.pdfUrl.startsWith("/certificates/")
-        ? existingCert.pdfUrl
-        : `/certificates/${existingCert.id}`;
-    } else {
-      const issuedAt = new Date();
-      const newCert = await prisma.certificate.create({
-        data: {
-          userId: session.user.id,
-          moduleId,
-          pdfUrl: `/certificates/${session.user.id}-${moduleId}`,
-          issuedAt,
-        },
-      });
-
-      certificateUrl = `/certificates/${newCert.id}`;
-      await prisma.certificate.update({
-        where: { id: newCert.id },
-        data: { pdfUrl: certificateUrl },
-      });
-    }
   }
 
+  // Which questions were wrong is deliberately not returned: combined with
+  // retries it would let anyone find the answers by elimination.
   return NextResponse.json({
     score,
     passed,
     correctCount,
     totalQuestions: questions.length,
-    missedQuestionIds,
-    attemptId: attempt.id,
-    certificateUrl,
+    attemptId: result.attempt.id,
+    attemptsRemaining: Math.max(0, state.attemptsRemaining - 1),
+    certificateUrl: result.certificate ? certificatePath(result.certificate.verificationCode) : null,
+    expiresAt: result.certificate?.expiresAt ?? null,
   });
-}
+});

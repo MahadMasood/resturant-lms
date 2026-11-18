@@ -1,53 +1,71 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser, type CurrentUser } from "@/lib/session";
+import { audit } from "@/lib/audit";
 
-// DELETE /api/admin/tenants/[id] — super admin only: cascades delete all modules, users, certificates
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+type Params = { params: Promise<{ id: string }> };
+
+const patchSchema = z.object({
+  name: z.string().trim().min(1, "Venue name is required").max(120).optional(),
+  archived: z.boolean().optional(),
+});
+
+async function setArchived(user: CurrentUser, tenant: { id: string; name: string; archivedAt: Date | null }, archived: boolean) {
+  if (archived === (tenant.archivedAt !== null)) return;
+  await prisma.tenant.update({ where: { id: tenant.id }, data: { archivedAt: archived ? new Date() : null } });
+  await audit(user, {
+    action: archived ? "venue.archived" : "venue.restored",
+    targetType: "venue",
+    targetId: tenant.id,
+    tenantId: tenant.id,
+    summary: archived
+      ? `${user.name} archived venue "${tenant.name}" (sign-ins blocked, records kept)`
+      : `${user.name} restored venue "${tenant.name}"`,
+  });
+}
+
+// PATCH /api/admin/tenants/[id] — rename, archive or restore a venue
+export const PATCH = api(async (req: NextRequest, { params }: Params) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
+  const { id } = await params;
+  const body = await parseBody(req, patchSchema);
+
+  const tenant = await prisma.tenant.findUnique({ where: { id } });
+  if (!tenant) throw new ApiError(404, "Venue not found");
+
+  if (body.name && body.name !== tenant.name) {
+    await prisma.tenant.update({ where: { id }, data: { name: body.name } });
+    await audit(user, {
+      action: "venue.renamed",
+      targetType: "venue",
+      targetId: id,
+      tenantId: id,
+      summary: `${user.name} renamed "${tenant.name}" to "${body.name}"`,
+    });
+  }
+  if (body.archived !== undefined) {
+    await setArchived(user, { ...tenant, name: body.name ?? tenant.name }, body.archived);
   }
 
+  const updated = await prisma.tenant.findUniqueOrThrow({ where: { id } });
+  return NextResponse.json({ success: true, tenant: updated });
+});
+
+// DELETE /api/admin/tenants/[id] — archives the venue. Its people can no longer
+// sign in, but every training record and certificate is kept and can be restored.
+export const DELETE = api(async (req: NextRequest, { params }: Params) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
   const { id } = await params;
-  if (!id) return NextResponse.json({ error: "Tenant ID required" }, { status: 400 });
 
-  // Prevent deleting protected system tenant if needed
   const tenant = await prisma.tenant.findUnique({ where: { id } });
-  if (!tenant) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
+  if (!tenant) throw new ApiError(404, "Venue not found");
 
-  await prisma.$transaction(async (tx) => {
-    // 1. Delete all watch progress for users in this tenant
-    const users = await tx.user.findMany({ where: { tenantId: id }, select: { id: true } });
-    const userIds = users.map((u: { id: string }) => u.id);
-
-    if (userIds.length > 0) {
-      await tx.watchProgress.deleteMany({ where: { userId: { in: userIds } } });
-      await tx.quizAttempt.deleteMany({ where: { userId: { in: userIds } } });
-      await tx.certificate.deleteMany({ where: { userId: { in: userIds } } });
-    }
-
-    // 2. Delete questions for modules in this tenant
-    const modules = await tx.module.findMany({ where: { tenantId: id }, select: { id: true } });
-    const moduleIds = modules.map((m: { id: string }) => m.id);
-
-    if (moduleIds.length > 0) {
-      await tx.question.deleteMany({ where: { moduleId: { in: moduleIds } } });
-      await tx.module.deleteMany({ where: { id: { in: moduleIds } } });
-    }
-
-    // 3. Delete users in this tenant
-    await tx.user.deleteMany({ where: { tenantId: id } });
-
-    // 4. Delete equipment in this tenant
-    await tx.equipmentItem.deleteMany({ where: { tenantId: id } });
-
-    // 5. Delete tenant
-    await tx.tenant.delete({ where: { id } });
+  await setArchived(user, tenant, true);
+  return NextResponse.json({
+    success: true,
+    archived: true,
+    message: `Venue "${tenant.name}" archived. Its records are kept and it can be restored.`,
   });
-
-  return NextResponse.json({ success: true, message: `Tenant "${tenant.name}" deleted successfully.` });
-}
+});

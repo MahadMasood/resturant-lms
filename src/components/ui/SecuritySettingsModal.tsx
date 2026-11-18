@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 
 interface SecuritySettingsModalProps {
   isOpen: boolean;
@@ -31,8 +32,8 @@ export default function SecuritySettingsModal({
     setError(null);
     setSuccess(false);
 
-    if (newPassword.length < 6) {
-      setError("New password must be at least 6 characters.");
+    if (newPassword.length < 12) {
+      setError("New password must be at least 12 characters.");
       return;
     }
 
@@ -54,14 +55,14 @@ export default function SecuritySettingsModal({
         throw new Error(data.error || "Failed to update password.");
       }
 
+      // Changing the password ends every session, including this one.
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setTimeout(() => {
-        setSuccess(false);
-        onClose();
-      }, 2000);
+        signOut({ callbackUrl: "/login?reason=password-changed" });
+      }, 1500);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error updating password.");
     } finally {
@@ -105,7 +106,7 @@ export default function SecuritySettingsModal({
             <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
-            <span>Password updated successfully! Closing...</span>
+            <span>Password updated. Signing you out so you can sign in with it...</span>
           </div>
         )}
 
@@ -135,7 +136,7 @@ export default function SecuritySettingsModal({
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-              placeholder="Minimum 6 characters"
+              placeholder="Minimum 12 characters"
             />
           </div>
 

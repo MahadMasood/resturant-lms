@@ -1,60 +1,36 @@
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { api } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { certificatePath, getStaffModuleStates } from "@/lib/training";
 
-// GET /api/staff/modules — returns modules assigned to this staff's tenant with sequential progression
-export async function GET() {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "STAFF") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+// GET /api/staff/modules — this staff member's modules with sequential unlocking
+export const GET = api(async () => {
+  const user = await requireUser({ roles: ["STAFF"] });
+  const states = await getStaffModuleStates(user.id, user.tenantId!);
 
-  const { tenantId, id: userId } = session.user;
-  if (!tenantId) return NextResponse.json({ error: "No tenant" }, { status: 400 });
-
-  const modules = await prisma.module.findMany({
-    where: { tenantId },
-    orderBy: { orderIndex: "asc" },
-    include: {
-      _count: { select: { questions: true } },
-      watchProgress: { where: { userId } },
-      quizAttempts: { where: { userId }, orderBy: { createdAt: "desc" } },
-      certificates: { where: { userId } },
-    },
-  });
-
-  const result: any[] = [];
-  let previousModulePassed = true; // First module is always unlocked
-
-  for (let i = 0; i < modules.length; i++) {
-    const m = modules[i];
-    const wp = m.watchProgress[0];
-    const latestAttempt = m.quizAttempts[0];
-    const cert = m.certificates[0];
-
-    const quizPassed = latestAttempt?.passed ?? false;
-    const isLocked = !previousModulePassed;
-
-    result.push({
-      id: m.id,
-      title: m.title,
-      description: m.description,
-      videoUrl: m.videoUrl,
-      orderIndex: m.orderIndex,
-      questionCount: m._count.questions,
-      watchedSeconds: wp?.watchedSeconds ?? 0,
-      durationSeconds: wp?.durationSeconds ?? 0,
-      completed: wp?.completed ?? false,
-      quizPassed,
-      quizScore: latestAttempt?.score ?? null,
-      attemptsCount: m.quizAttempts.length,
-      certificateUrl: cert ? `/certificates/${cert.id}` : null,
-      isLocked,
-      requiredPreviousTitle: i > 0 && isLocked ? modules[i - 1].title : null,
-    });
-
-    // Update for next iteration: next module is unlocked only if current module was completed/passed
-    previousModulePassed = quizPassed || (wp?.completed ?? false);
-  }
-
-  return NextResponse.json(result);
-}
+  return NextResponse.json(
+    states.map((s) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      // Locked modules don't reveal their video until they unlock.
+      videoUrl: s.isLocked ? null : s.videoUrl,
+      orderIndex: s.orderIndex,
+      questionCount: s.questionCount,
+      watchedSeconds: s.maxWatchedSeconds,
+      durationSeconds: s.durationSeconds ?? 0,
+      completed: s.completed,
+      quizEligible: s.quizEligible,
+      quizPassed: s.passed,
+      quizScore: s.latestScore,
+      attemptsCount: s.attemptsCount,
+      attemptsRemaining: s.attemptsRemaining,
+      nextAttemptAt: s.nextAttemptAt,
+      certificateUrl: s.certificate ? certificatePath(s.certificate.verificationCode) : null,
+      certificateStatus: s.certificate?.status ?? null,
+      certificateExpiresAt: s.certificate?.expiresAt ?? null,
+      isLocked: s.isLocked,
+      requiredPreviousTitle: s.requiredPreviousTitle,
+    }))
+  );
+});

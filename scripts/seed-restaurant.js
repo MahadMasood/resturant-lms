@@ -1,13 +1,5 @@
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env.local") });
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const bcrypt = require("bcryptjs");
-const { Pool } = require("pg");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const { pool } = require("./db");
 
 async function main() {
   console.log("Seeding restaurant into Neon database...");
@@ -24,9 +16,11 @@ async function main() {
   );
   console.log(`Restaurant tenant ready: "${tenantName}" (${tenantId})`);
 
-  // 2. Passwords
-  const managerHash = await bcrypt.hash("manager123", 12);
-  const staffHash = await bcrypt.hash("staff123", 12);
+  // 2. Passwords: SEED_PASSWORD, or the demo defaults. Only applied to accounts created by this run.
+  const managerPassword = process.env.SEED_PASSWORD || "manager123";
+  const staffPassword = process.env.SEED_PASSWORD || "staff123";
+  const managerHash = await bcrypt.hash(managerPassword, 12);
+  const staffHash = await bcrypt.hash(staffPassword, 12);
 
   // 3. Manager
   const managerEmail = "marcus.vance@grandbistro.com";
@@ -73,8 +67,8 @@ async function main() {
   // 5. Training Modules
   const moduleId1 = "module-hospitality-standards";
   await pool.query(
-    `INSERT INTO "Module" (id, "tenantId", title, description, "videoUrl", "orderIndex", "createdAt")
-     VALUES ($1, $2, $3, $4, $5, 1, NOW())
+    `INSERT INTO "Module" (id, "tenantId", title, description, "videoUrl", "orderIndex", "createdAt", "publishedAt")
+     VALUES ($1, $2, $3, $4, $5, 1, NOW(), NOW())
      ON CONFLICT (id) DO UPDATE 
      SET title = $3, description = $4, "videoUrl" = $5, "tenantId" = $2`,
     [
@@ -88,8 +82,8 @@ async function main() {
 
   const moduleId2 = "module-wine-sommelier";
   await pool.query(
-    `INSERT INTO "Module" (id, "tenantId", title, description, "videoUrl", "orderIndex", "createdAt")
-     VALUES ($1, $2, $3, $4, $5, 2, NOW())
+    `INSERT INTO "Module" (id, "tenantId", title, description, "videoUrl", "orderIndex", "createdAt", "publishedAt")
+     VALUES ($1, $2, $3, $4, $5, 2, NOW(), NOW())
      ON CONFLICT (id) DO UPDATE 
      SET title = $3, description = $4, "videoUrl" = $5, "tenantId" = $2`,
     [
@@ -178,10 +172,10 @@ async function main() {
   if (elena) {
     // Watch Progress completed
     await pool.query(
-      `INSERT INTO "WatchProgress" (id, "userId", "moduleId", "watchedSeconds", "durationSeconds", completed, "updatedAt")
-       VALUES (gen_random_uuid(), $1, $2, 600, 600, true, NOW())
+      `INSERT INTO "WatchProgress" (id, "userId", "moduleId", "watchedSeconds", "maxWatchedSeconds", "durationSeconds", completed, "updatedAt")
+       VALUES (gen_random_uuid(), $1, $2, 600, 600, 600, true, NOW())
        ON CONFLICT ("userId", "moduleId") DO UPDATE 
-       SET completed = true, "watchedSeconds" = 600, "durationSeconds" = 600, "updatedAt" = NOW()`,
+       SET completed = true, "watchedSeconds" = 600, "maxWatchedSeconds" = 600, "durationSeconds" = 600, "updatedAt" = NOW()`,
       [elena.id, moduleId1]
     );
 
@@ -194,16 +188,17 @@ async function main() {
 
     // Certificate issued
     await pool.query(
-      `INSERT INTO "Certificate" (id, "userId", "moduleId", "pdfUrl", "issuedAt", "expiresAt")
+      `INSERT INTO "Certificate" (id, "userId", "moduleId", "pdfUrl", "issuedAt", "expiresAt", "score")
        VALUES (
          'CERT-GRANDBISTRO-001',
          $1,
          $2,
-         '/api/certificates/verify/CERT-GRANDBISTRO-001',
+         '/certificates/CERT-GRANDBISTRO-001',
          NOW(),
-         NOW() + INTERVAL '1 year'
+         NOW() + INTERVAL '1 year',
+         100
        )
-       ON CONFLICT ("userId", "moduleId") DO NOTHING`,
+       ON CONFLICT (id) DO NOTHING`,
       [elena.id, moduleId1]
     );
     console.log(`Issued Certificate "CERT-GRANDBISTRO-001" to ${elena.name}`);
@@ -214,10 +209,9 @@ async function main() {
   console.log(" Restaurant Seeding Successful!");
   console.log("========================================================");
   console.log(` Venue Name   : ${tenantName} (ID: ${tenantId})`);
-  console.log(` Manager      : ${managerEmail} (password: manager123)`);
-  console.log(` Staff 1      : elena.rostova@grandbistro.com (password: staff123) [Certified]`);
-  console.log(` Staff 2      : liam.chen@grandbistro.com (password: staff123)`);
-  console.log(` Staff 3      : maya.patel@grandbistro.com (password: staff123)`);
+  console.log(` Manager      : ${managerEmail}`);
+  console.log(` Staff        : elena.rostova@ [Certified], liam.chen@, maya.patel@grandbistro.com`);
+  console.log(` Passwords    : manager ${managerPassword}, staff ${staffPassword} (new accounts only)`);
   console.log(` Modules      : 2 Curriculums provisioned`);
   console.log(` Certificate  : CERT-GRANDBISTRO-001`);
   console.log("========================================================\n");

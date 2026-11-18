@@ -1,9 +1,12 @@
 export const instant = false;
 
+import { cache } from "react";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
+import { findPublicCertificate } from "@/lib/certificates";
+import { baseUrlFrom } from "@/lib/request";
 import PrintCertificateButton from "@/components/ui/PrintCertificateButton";
 import CertificateQrCode from "@/components/ui/CertificateQrCode";
 
@@ -11,97 +14,39 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+const getCertificate = cache((id: string) => findPublicCertificate(decodeURIComponent(id)));
+
+const longDate = (d: Date) =>
+  new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const cleanId = decodeURIComponent(id).replace(/\.html$/, "");
-
-  const cert = await prisma.certificate.findFirst({
-    where: {
-      OR: [
-        { id: cleanId },
-        { pdfUrl: `/certificates/${cleanId}` },
-        { pdfUrl: `/certificates/${cleanId}.html` },
-        { pdfUrl: { contains: cleanId } },
-      ],
-    },
-    include: {
-      user: { select: { name: true } },
-      module: { select: { title: true } },
-    },
-  });
+  const cert = await getCertificate(id);
 
   if (!cert) {
-    return {
-      title: "Certificate Verification | LMS Portal",
-    };
+    return { title: "Certificate Verification | Himalayan Reserves" };
   }
 
   return {
-    title: `Accreditation Certificate — ${cert.user.name} | LMS Portal`,
-    description: `Official digital accreditation credential for ${cert.user.name} in ${cert.module.title}.`,
+    title: `Training Certificate — ${cert.recipientName} | Himalayan Reserves`,
+    description: `Himalayan Reserves training certificate for ${cert.recipientName} in ${cert.courseTitle}.`,
   };
 }
 
 export default async function CertificatePage({ params }: PageProps) {
   const { id } = await params;
-  const cleanId = decodeURIComponent(id).replace(/\.html$/, "");
-
-  const certificate = await prisma.certificate.findFirst({
-    where: {
-      OR: [
-        { id: cleanId },
-        { pdfUrl: `/certificates/${cleanId}` },
-        { pdfUrl: `/certificates/${cleanId}.html` },
-        { pdfUrl: { contains: cleanId } },
-      ],
-    },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          tenant: { select: { id: true, name: true } },
-        },
-      },
-      module: {
-        select: {
-          id: true,
-          title: true,
-          description: true,
-        },
-      },
-    },
-  });
+  const certificate = await getCertificate(id);
 
   if (!certificate) {
     notFound();
   }
 
-  // Fetch the official passing quiz score
-  const attempt = await prisma.quizAttempt.findFirst({
-    where: {
-      userId: certificate.userId,
-      moduleId: certificate.moduleId,
-      passed: true,
-    },
-    orderBy: { score: "desc" },
-    select: { score: true, createdAt: true },
-  });
-
-  const recipientName = certificate.user.name;
-  const courseTitle = certificate.module.title;
-  const venueName = certificate.user.tenant?.name || "Accredited Culinary Venue";
-  const score = attempt?.score ?? 100;
+  const { recipientName, courseTitle, venueName, score, code, status } = certificate;
   const certId = certificate.id;
-  const baseUrl = process.env.NEXTAUTH_URL || "https://lms-portal.com";
-  const verifyUrl = `${baseUrl}/verify?id=${encodeURIComponent(certId)}`;
-
-  const dateIssued = new Date(certificate.issuedAt).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const baseUrl = baseUrlFrom(await headers());
+  const verifyPath = `/verify?code=${encodeURIComponent(code)}`;
+  const verifyUrl = `${baseUrl}${verifyPath}`;
+  const dateIssued = longDate(certificate.issuedAt);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 antialiased selection:bg-amber-500 selection:text-black">
@@ -119,15 +64,22 @@ export default async function CertificatePage({ params }: PageProps) {
               <span>Back to Dashboard</span>
             </Link>
 
-            <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-400 sm:inline-flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Cryptographically Verified Record
-            </span>
+            {status === "valid" ? (
+              <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-400 sm:inline-flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Valid certificate
+              </span>
+            ) : (
+              <span className="hidden items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-[11px] font-medium text-red-400 sm:inline-flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                {status === "expired" ? "Expired" : "Revoked"}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
             <Link
-              href={`/verify?id=${encodeURIComponent(certId)}`}
+              href={verifyPath}
               target="_blank"
               rel="noopener noreferrer"
               className="hidden text-xs text-neutral-400 transition hover:text-amber-400 md:inline-flex items-center gap-1"
@@ -143,6 +95,20 @@ export default async function CertificatePage({ params }: PageProps) {
         </div>
       </header>
 
+      {/* ─── Not-valid warning (also printed) ─────────────────────────────── */}
+      {status !== "valid" && (
+        <div className="mx-auto max-w-4xl px-4 pt-6 sm:px-8">
+          <div
+            role="alert"
+            className="rounded-2xl border border-red-500/40 bg-red-950/40 p-4 text-sm text-red-200 print:border-black print:bg-white print:text-black"
+          >
+            {status === "expired" && certificate.expiresAt
+              ? `This certificate expired on ${longDate(certificate.expiresAt)} and is no longer valid.`
+              : `This certificate has been revoked${certificate.statusReason ? ` (${certificate.statusReason})` : ""} and is no longer valid.`}
+          </div>
+        </div>
+      )}
+
       {/* ─── Certificate Viewport Container ──────────────────────────────── */}
       <main className="mx-auto flex max-w-4xl flex-col items-center justify-center p-4 py-8 sm:p-8 sm:py-12 print:p-0">
         <div
@@ -155,7 +121,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
           {/* Certificate Content */}
           <div className="relative z-10 flex flex-col items-center text-center">
-            {/* Official Accreditation Seal */}
+            {/* Seal */}
             <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-400/20 via-amber-500/10 to-transparent shadow-inner print:border-neutral-800 print:bg-neutral-100">
               <svg className="h-7 w-7 text-amber-400 print:text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
@@ -167,24 +133,24 @@ export default async function CertificatePage({ params }: PageProps) {
               </svg>
             </div>
 
-            {/* Institution Header */}
+            {/* Issuer Header */}
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-amber-400/90 print:text-neutral-700">
-              Hospitality Compliance Council
+              Himalayan Reserves
             </p>
             <p className="mt-0.5 text-[10px] uppercase tracking-widest text-neutral-400 print:text-neutral-500">
-              Culinary Accreditation & Food Safety Board
+              Restaurant Training Programme
             </p>
 
             {/* Certificate Title */}
             <h1 className="mt-6 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl print:text-black">
-              Certificate of Accreditation
+              Certificate of Completion
             </h1>
 
             <div className="my-4 h-px w-24 bg-gradient-to-r from-transparent via-amber-500/60 to-transparent print:via-neutral-400" />
 
             {/* Recipient Introduction */}
             <p className="text-xs uppercase tracking-wider text-neutral-400 print:text-neutral-600">
-              This officially certifies that
+              This certifies that
             </p>
 
             {/* Recipient Full Name */}
@@ -194,8 +160,7 @@ export default async function CertificatePage({ params }: PageProps) {
 
             {/* Certification Body Description */}
             <p className="mt-4 max-w-xl text-xs leading-relaxed text-neutral-300 sm:text-sm print:text-neutral-700">
-              has completed verified video instruction, met all anti-cheat high-water mark requirements,
-              and demonstrated professional culinary mastery in
+              watched the required training video and passed the assessment for
             </p>
 
             {/* Module Name Card */}
@@ -206,51 +171,53 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
 
             {/* Evaluation Score Pill */}
-            <div className="mt-5 flex items-center gap-2">
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3.5 py-1 text-xs font-semibold text-emerald-400 print:border-neutral-400 print:bg-neutral-100 print:text-black">
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Accreditation Score: {score}% (Passed)</span>
+                <span>{score !== null ? `Assessment score: ${score}% (passed)` : "Assessment passed"}</span>
               </span>
 
               <span className="text-xs text-neutral-400 print:text-neutral-600">
-                • Accredited at: <strong className="text-neutral-200 print:text-black">{venueName}</strong>
+                • Venue: <strong className="text-neutral-200 print:text-black">{venueName}</strong>
               </span>
             </div>
 
-            {/* Divider & Official Accreditation Credentials Footer */}
+            {/* Divider & Credentials Footer */}
             <div className="mt-10 w-full border-t border-white/10 pt-6 print:border-neutral-300">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-6 text-left">
                 {/* Text Metadata */}
                 <div className="grid grid-cols-2 gap-4 flex-1 w-full">
-                  {/* Issue Date */}
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                      Date of Accreditation
+                      Date Issued
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">{dateIssued}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
+                      Valid Until
                     </p>
                     <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
-                      {dateIssued}
+                      {certificate.expiresAt ? longDate(certificate.expiresAt) : "No expiry"}
                     </p>
                   </div>
 
-                  {/* Issuing Authority */}
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                      Issuing Authority
+                      Issued By
                     </p>
-                    <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">
-                      State Compliance Council
-                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-neutral-200 print:text-black">Himalayan Reserves</p>
                   </div>
 
-                  {/* Verification Token */}
-                  <div className="col-span-2">
+                  <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 print:text-neutral-500">
-                      Digital Verification Hash ID
+                      Verification Code
                     </p>
                     <p className="mt-0.5 font-mono text-xs font-medium text-amber-400 print:text-black break-all">
-                      {certId}
+                      {code}
                     </p>
                   </div>
                 </div>
@@ -265,14 +232,11 @@ export default async function CertificatePage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Bottom Security Note */}
-            <div className="mt-6 flex w-full items-center justify-between border-t border-white/5 pt-3 text-[10px] text-neutral-500 print:border-neutral-200 print:text-neutral-500">
-              <span>Cryptographically signed digital accreditation.</span>
-              <Link
-                href={`/verify?id=${encodeURIComponent(certId)}`}
-                className="hover:text-amber-400 transition"
-              >
-                verify.lms-portal.com/check
+            {/* Verification note */}
+            <div className="mt-6 flex w-full flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-3 text-[10px] text-neutral-500 print:border-neutral-200 print:text-neutral-500">
+              <span>Check this certificate is genuine and current at:</span>
+              <Link href={verifyPath} className="break-all hover:text-amber-400 transition">
+                {verifyUrl}
               </Link>
             </div>
           </div>

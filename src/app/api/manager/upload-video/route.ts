@@ -1,134 +1,64 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import path from "path";
 import fs from "fs";
+import { api, ApiError } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import {
+  ALLOWED_VIDEO_EXTENSIONS,
+  ALLOWED_VIDEO_TYPES,
+  MAX_VIDEO_BYTES,
+  getR2Config,
+  localStorageAllowed,
+  r2Client,
+} from "@/lib/storage";
 
-const ALLOWED_MIME_TYPES = new Set([
-  "video/mp4",
-  "video/webm",
-  "video/quicktime",
-  "video/x-msvideo",
-  "video/ogg",
-]);
+// POST /api/manager/upload-video — server-side upload, used when the browser
+// can't upload straight to R2. Without R2 it stores to public/videos, which
+// only works in development.
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
 
-const ALLOWED_EXTENSIONS = new Set([".mp4", ".webm", ".mov", ".avi", ".ogg"]);
-const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB limit for Cloudflare R2
+  const r2 = getR2Config();
+  if (!r2 && !localStorageAllowed()) {
+    throw new ApiError(503, "Video storage isn't configured. Set the R2_* environment variables.");
+  }
 
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const formData = await req.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new ApiError(400, "No file provided");
 
-  // Media addition is strictly restricted to Super Admin
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden. Media addition and video uploads are restricted to Super Admin." },
-      { status: 403 }
+  if (file.size > MAX_VIDEO_BYTES) {
+    throw new ApiError(413, "File exceeds 500MB maximum upload limit.");
+  }
+  if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
+    throw new ApiError(415, "Unsupported media type. Only MP4, WebM and MOV are supported.");
+  }
+  const ext = path.extname(file.name).toLowerCase();
+  if (!ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+    throw new ApiError(400, "Invalid file extension. Use .mp4, .webm or .mov");
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const safeBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const safeFilename = `${Date.now()}-${safeBase}${ext}`;
+
+  if (r2) {
+    const key = `${user.tenantId || "admin"}/videos/${safeFilename}`;
+    await r2Client(r2).send(
+      new PutObjectCommand({ Bucket: r2.bucket, Key: key, Body: buffer, ContentType: file.type })
     );
-  }
-
-  try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    // 1. File Size Validation (up to 500MB for Cloudflare R2)
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json(
-        { error: "File exceeds 500MB maximum upload limit." },
-        { status: 413 }
-      );
-    }
-
-    // 2. MIME Type Validation
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      return NextResponse.json(
-        { error: `Unsupported media type "${file.type}". Only MP4, WebM, and MOV are supported.` },
-        { status: 415 }
-      );
-    }
-
-    // 3. File Extension Validation
-    const ext = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_EXTENSIONS.has(ext)) {
-      return NextResponse.json(
-        { error: `Invalid file extension "${ext}". Must be .mp4, .webm, or .mov` },
-        { status: 400 }
-      );
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const safeBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, "_");
-    const safeFilename = `${Date.now()}-${safeBase}${ext}`;
-    const tenantFolder = session.user.tenantId || "admin";
-
-    // 4. Primary: Stream directly to Cloudflare R2 if configured
-    let r2Endpoint = process.env.R2_ENDPOINT?.trim();
-    if (r2Endpoint && !r2Endpoint.startsWith("http")) {
-      r2Endpoint = `https://${r2Endpoint}`;
-    }
-    r2Endpoint = r2Endpoint?.replace(/\/+$/, "");
-
-    const r2AccessKey = process.env.R2_ACCESS_KEY_ID?.trim();
-    const r2SecretKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-    const r2Bucket = process.env.R2_BUCKET_NAME?.trim();
-
-    if (r2Endpoint && r2AccessKey && r2SecretKey && r2Bucket) {
-      const s3 = new S3Client({
-        region: "auto",
-        endpoint: r2Endpoint,
-        forcePathStyle: true,
-        credentials: {
-          accessKeyId: r2AccessKey,
-          secretAccessKey: r2SecretKey,
-        },
-      });
-
-      const key = `${tenantFolder}/videos/${safeFilename}`;
-
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: r2Bucket,
-          Key: key,
-          Body: buffer,
-          ContentType: file.type || "video/mp4",
-        })
-      );
-
-      const baseUrl = (process.env.R2_PUBLIC_URL || `${r2Endpoint}/${r2Bucket}`).trim().replace(/\/+$/, "");
-      const publicUrl = `${baseUrl}/${key}`;
-
-      return NextResponse.json({
-        url: publicUrl,
-        filename: safeFilename,
-        key,
-        storage: "cloudflare-r2",
-        provider: "Cloudflare R2",
-      });
-    }
-
-    // 5. Fallback: Local disk storage if R2 is not configured
-    const uploadDir = path.join(process.cwd(), "public", "videos");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    const filePath = path.join(uploadDir, safeFilename);
-    fs.writeFileSync(filePath, buffer);
-
-    const localUrl = `/videos/${safeFilename}`;
     return NextResponse.json({
-      url: localUrl,
+      url: `${r2.publicBaseUrl}/${key}`,
       filename: safeFilename,
-      storage: "local-fallback",
+      key,
+      storage: "cloudflare-r2",
     });
-  } catch (err) {
-    console.error("Video upload error:", err);
-    return NextResponse.json({ error: "Failed to upload video to storage" }, { status: 500 });
   }
-}
+
+  const uploadDir = path.join(process.cwd(), "public", "videos");
+  await fs.promises.mkdir(uploadDir, { recursive: true });
+  await fs.promises.writeFile(path.join(uploadDir, safeFilename), buffer);
+
+  return NextResponse.json({ url: `/videos/${safeFilename}`, filename: safeFilename, storage: "local-dev" });
+});

@@ -1,4 +1,5 @@
 // Prisma schema — Prisma 7 (datasource URL is in prisma.config.ts)
+// Schema changes go through migrations: see README "Database migrations".
 
 generator client {
   provider = "prisma-client-js"
@@ -9,9 +10,11 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  createdAt  DateTime  @default(now())
+  // Archived venues keep their records but their users can no longer sign in.
+  archivedAt DateTime?
 
   users     User[]
   modules   Module[]
@@ -28,10 +31,20 @@ model User {
 
   createdAt DateTime @default(now())
 
-  tenant        Tenant?         @relation(fields: [tenantId], references: [id])
-  watchProgress WatchProgress[]
-  quizAttempts  QuizAttempt[]
-  certificates  Certificate[]
+  // Bumped whenever existing sessions must stop working (password change,
+  // reset, deactivation, role change). Compared against the JWT on every request.
+  sessionVersion     Int       @default(0)
+  mustChangePassword Boolean   @default(false)
+  // Offboarded users are deactivated, never deleted, so training records survive.
+  deactivatedAt      DateTime?
+  // Set when personal data was erased (retention policy or erasure request).
+  anonymizedAt       DateTime?
+
+  tenant              Tenant?              @relation(fields: [tenantId], references: [id])
+  watchProgress       WatchProgress[]
+  quizAttempts        QuizAttempt[]
+  certificates        Certificate[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 enum Role {
@@ -47,6 +60,18 @@ model Module {
   description String?
   videoUrl    String
   orderIndex  Int     @default(0)
+
+  // Authoritative video length, set by the super admin's editor. Progress
+  // completion is computed against this, never against a client-sent value.
+  durationSeconds Float?
+  // Certificate validity; null means certificates never expire.
+  validityMonths  Int?      @default(12)
+  // Incremented whenever the quiz questions change.
+  quizVersion     Int       @default(1)
+  // Draft modules (null) are hidden from staff.
+  publishedAt     DateTime?
+  // Modules with training history are archived instead of deleted.
+  archivedAt      DateTime?
 
   createdAt DateTime @default(now())
 
@@ -68,12 +93,19 @@ model Question {
 }
 
 model WatchProgress {
-  id              String  @id @default(cuid())
-  userId          String
-  moduleId        String
-  watchedSeconds  Float   @default(0)
-  durationSeconds Float   @default(0)
-  completed       Boolean @default(false)
+  id                  String    @id @default(cuid())
+  userId              String
+  moduleId            String
+  // Current playback position as last reported.
+  watchedSeconds      Float     @default(0)
+  // Furthest point the server has accepted (the high-water mark).
+  maxWatchedSeconds   Float     @default(0)
+  durationSeconds     Float     @default(0)
+  completed           Boolean   @default(false)
+  // Start of the current continuous viewing segment, used to cap how fast
+  // the high-water mark may advance in real time.
+  segmentStartedAt    DateTime?
+  segmentStartSeconds Float     @default(0)
 
   updatedAt DateTime @updatedAt
 
@@ -84,30 +116,41 @@ model WatchProgress {
 }
 
 model QuizAttempt {
-  id       String  @id @default(cuid())
-  userId   String
-  moduleId String
-  score    Float
-  passed   Boolean
+  id          String    @id @default(cuid())
+  userId      String
+  moduleId    String
+  score       Float
+  passed      Boolean
+  quizVersion Int       @default(1)
+  // Voided by a manager's progress reset; kept for history, ignored for limits.
+  voidedAt    DateTime?
 
   createdAt DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   module Module @relation(fields: [moduleId], references: [id])
+
+  @@index([userId, moduleId, createdAt])
 }
 
 model Certificate {
-  id        String    @id @default(cuid())
-  userId    String
-  moduleId  String
-  pdfUrl    String
-  issuedAt  DateTime  @default(now())
-  expiresAt DateTime?
+  id               String    @id @default(cuid())
+  userId           String
+  moduleId         String
+  pdfUrl           String
+  issuedAt         DateTime  @default(now())
+  expiresAt        DateTime?
+  // Unguessable public code used in QR codes and verification links.
+  verificationCode String    @unique @default(dbgenerated("upper(substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 16))"))
+  score            Float?
+  quizVersion      Int       @default(1)
+  revokedAt        DateTime?
+  revokedReason    String?
 
   user   User   @relation(fields: [userId], references: [id])
   module Module @relation(fields: [moduleId], references: [id])
 
-  @@unique([userId, moduleId])
+  @@index([userId, moduleId])
 }
 
 enum EquipmentType {
@@ -133,7 +176,72 @@ model EquipmentItem {
   status     EquipmentStatus @default(ACTIVE)
   notes      String?
   createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  updatedAt  DateTime        @default(now()) @updatedAt
 
-  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+// Who did what. No foreign keys, so entries outlive the records they describe.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorName  String?
+  actorRole  String?
+  tenantId   String?
+  action     String
+  targetType String
+  targetId   String?
+  summary    String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([createdAt])
+}
+
+// Single-use links for password resets and invitations. Only a hash is stored.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  purpose   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Fixed-window counters for rate limiting (login, verification, inquiries).
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+model Inquiry {
+  id            String        @id @default(cuid())
+  referenceCode String        @unique
+  name          String
+  email         String
+  phone         String?
+  purpose       String?
+  kitType       String?
+  city          String?
+  notes         String?
+  status        InquiryStatus @default(NEW)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, createdAt])
 }

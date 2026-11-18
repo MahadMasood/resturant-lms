@@ -1,14 +1,15 @@
 export const instant = false;
 
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/session";
 import SuperAdminView from "@/components/ui/SuperAdminView";
 
 export default async function SuperAdminDashboard() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?reason=session");
+  if (user.mustChangePassword) redirect("/change-password");
 
-  if (session.user.role !== "SUPER_ADMIN") {
+  if (user.role !== "SUPER_ADMIN") {
     redirect("/login");
   }
 

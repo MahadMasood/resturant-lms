@@ -6,6 +6,7 @@ import StaffProgressTable from "@/components/ui/StaffProgressTable";
 import StatsCard from "@/components/ui/StatsCard";
 import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 import SaltEquipmentManager from "@/components/ui/SaltEquipmentManager";
+import AuditLogPanel from "@/components/ui/AuditLogPanel";
 
 interface ModuleItem {
   id: string;
@@ -60,7 +61,8 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = setTimeout(loadData, 0);
+    return () => clearTimeout(timer);
   }, [loadData]);
 
   const handleExportCSV = () => {
@@ -119,6 +121,16 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    },
+    {
+      id: "activity",
+      label: "Activity Log",
+      description: "Who changed accounts, passwords and training records",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
     },
@@ -409,95 +421,6 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
         )}
 
         {/* ======================================================== */}
-        {/* TAB 4: STAFF ONBOARDING                                  */}
-        {/* ======================================================== */}
-        {activeTab === "onboarding" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Team Onboarding &amp; Staff Directory
-                </h1>
-                <p className="text-xs md:text-sm text-neutral-400 mt-1">
-                  Onboard new kitchen, bar, and floor staff into your venue with temporary credentials.
-                </p>
-              </div>
-
-              <button
-                onClick={() => setIsStaffModalOpen(true)}
-                className="inline-flex items-center gap-2 self-start sm:self-auto rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-600/25"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-                <span>+ Onboard New Staff</span>
-              </button>
-            </div>
-
-            <div className="rounded-3xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-xl">
-              <div className="border-b border-neutral-800 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-neutral-300">
-                  Venue Employees ({staff.length})
-                </h2>
-                <span className="text-xs text-neutral-500 font-mono">{tenantName}</span>
-              </div>
-
-              {loading ? (
-                <div className="p-8 text-center text-xs text-neutral-500">Loading staff records...</div>
-              ) : staff.length === 0 ? (
-                <div className="p-12 text-center text-xs text-neutral-500">
-                  No staff members onboarded yet. Click &quot;+ Onboard New Staff&quot; to register your first team member.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-neutral-800 text-left text-xs font-medium uppercase tracking-wider text-neutral-500 bg-neutral-950/40">
-                        <th className="px-6 py-3.5">Employee Name</th>
-                        <th className="px-6 py-3.5">Email Address</th>
-                        <th className="px-6 py-3.5">Role</th>
-                        <th className="px-6 py-3.5">Joined Date</th>
-                        <th className="px-6 py-3.5">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {staff.map((s) => (
-                        <tr
-                          key={s.id}
-                          className="border-b border-neutral-800/40 last:border-0 hover:bg-neutral-800/30 transition"
-                        >
-                          <td className="px-6 py-4 font-semibold text-white flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-neutral-800 border border-neutral-700 text-xs font-bold text-neutral-300">
-                              {s.name.charAt(0).toUpperCase()}
-                            </div>
-                            <span>{s.name}</span>
-                          </td>
-                          <td className="px-6 py-4 text-xs font-mono text-neutral-400">{s.email}</td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                              Certified Staff
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-xs text-neutral-400">
-                            {new Date(s.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] text-neutral-300">
-                              Active Roster
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ======================================================== */}
         {/* TAB 5: AUDIT EXPORT & HEALTH INSPECTION                  */}
         {/* ======================================================== */}
         {activeTab === "export" && (
@@ -571,6 +494,18 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
         {activeTab === "equipment" && (
           <div className="animate-in fade-in duration-200">
             <SaltEquipmentManager tenantName={tenantName} />
+          </div>
+        )}
+
+        {activeTab === "activity" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Activity Log</h1>
+              <p className="text-xs md:text-sm text-neutral-400 mt-1">
+                A record of account, password and training changes at {tenantName}.
+              </p>
+            </div>
+            <AuditLogPanel />
           </div>
         )}
       </div>

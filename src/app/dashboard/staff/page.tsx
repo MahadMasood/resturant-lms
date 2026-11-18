@@ -1,15 +1,13 @@
 export const instant = false;
 
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/session";
 import StaffView from "@/components/ui/StaffView";
 
 export default async function StaffDashboard() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?reason=session");
+  if (user.mustChangePassword) redirect("/change-password");
 
-  const staffName = session.user.name || "Staff Member";
-  const tenantName = session.user.tenantName || "Restaurant";
-
-  return <StaffView staffName={staffName} tenantName={tenantName} />;
+  return <StaffView staffName={user.name} tenantName={user.tenantName || "Restaurant"} />;
 }

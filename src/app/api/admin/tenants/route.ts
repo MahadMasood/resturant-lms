@@ -1,31 +1,31 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { emailSchema, nameSchema, passwordSchema } from "@/lib/validation";
+import { generateTemporaryPassword, hashPassword } from "@/lib/passwords";
+import { audit } from "@/lib/audit";
+import { sendWelcomeEmail } from "@/lib/people";
+import { baseUrlFrom } from "@/lib/request";
 
-// GET /api/admin/tenants — list all tenants with their managers and staff
-export async function GET() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+// GET /api/admin/tenants — every venue with its people and equipment summary
+export const GET = api(async () => {
+  await requireUser({ roles: ["SUPER_ADMIN"] });
 
   const tenants = await prisma.tenant.findMany({
     include: {
-      _count: { select: { users: true, modules: true } },
+      _count: { select: { modules: { where: { archivedAt: null } } } },
       users: {
+        where: { anonymizedAt: null },
         select: {
           id: true,
           name: true,
           email: true,
           role: true,
           createdAt: true,
-          _count: {
-            select: {
-              certificates: true,
-              quizAttempts: true,
-            },
-          },
+          deactivatedAt: true,
+          _count: { select: { certificates: { where: { revokedAt: null } }, quizAttempts: true } },
         },
         orderBy: [{ role: "asc" }, { name: "asc" }],
       },
@@ -44,91 +44,100 @@ export async function GET() {
         orderBy: [{ type: "asc" }, { cooksCount: "desc" }],
       },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ archivedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
   });
 
   return NextResponse.json(
-    tenants.map((t: any) => {
-      const activeCookingPlates = t.equipment?.filter((e: any) => e.type === "COOKING_PLATE" && e.status !== "RETIRED") ?? [];
-      const totalCookingPlates = activeCookingPlates.reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
-      const averagePlateHealth = activeCookingPlates.length > 0
-        ? Math.round(
-            activeCookingPlates.reduce((sum: number, p: any) => {
-              const h = Math.max(0, Math.round(((p.maxCooks - p.cooksCount) / p.maxCooks) * 100));
-              return sum + h;
-            }, 0) / activeCookingPlates.length
-          )
-        : 100;
-
-      const totalMetalRings = (t.equipment?.filter((e: any) => e.type === "METAL_RING") ?? [])
-        .reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
-
-      const totalServingPlates = (t.equipment?.filter((e: any) => e.type === "SERVING_PLATE") ?? [])
-        .reduce((sum: number, e: any) => sum + (e.quantity || 1), 0);
-
-      const nearDepletedCount = (t.equipment?.filter((e: any) => e.type === "COOKING_PLATE" && e.cooksCount >= 36) ?? []).length;
+    tenants.map((t) => {
+      const activeCookingPlates = t.equipment.filter((e) => e.type === "COOKING_PLATE" && e.status !== "RETIRED");
+      const totalCookingPlates = activeCookingPlates.reduce((sum, e) => sum + (e.quantity || 1), 0);
+      const averagePlateHealth =
+        activeCookingPlates.length > 0
+          ? Math.round(
+              activeCookingPlates.reduce(
+                (sum, p) => sum + Math.max(0, Math.round(((p.maxCooks - p.cooksCount) / p.maxCooks) * 100)),
+                0
+              ) / activeCookingPlates.length
+            )
+          : 100;
+      const countOf = (type: string) =>
+        t.equipment.filter((e) => e.type === type).reduce((sum, e) => sum + (e.quantity || 1), 0);
+      const activeUsers = t.users.filter((u) => !u.deactivatedAt);
 
       return {
         id: t.id,
         name: t.name,
         createdAt: t.createdAt,
-        userCount: t._count.users,
+        archivedAt: t.archivedAt,
+        userCount: activeUsers.length,
         moduleCount: t._count.modules,
-        users: t.users.map((u: any) => ({
+        users: activeUsers.map((u) => ({
           id: u.id,
           name: u.name,
           email: u.email,
           role: u.role,
           createdAt: u.createdAt,
-          certificatesCount: u._count?.certificates ?? 0,
-          quizAttemptsCount: u._count?.quizAttempts ?? 0,
+          certificatesCount: u._count.certificates,
+          quizAttemptsCount: u._count.quizAttempts,
         })),
-        equipment: t.equipment ?? [],
+        equipment: t.equipment,
         equipmentSummary: {
           totalCookingPlates,
           averagePlateHealth,
-          totalMetalRings,
-          totalServingPlates,
-          nearDepletedCount,
+          totalMetalRings: countOf("METAL_RING"),
+          totalServingPlates: countOf("SERVING_PLATE"),
+          nearDepletedCount: t.equipment.filter((e) => e.type === "COOKING_PLATE" && e.cooksCount >= 36).length,
         },
       };
     })
   );
-}
+});
 
-// POST /api/admin/tenants — create a new restaurant + manager account
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+const createSchema = z.object({
+  tenantName: z.string().trim().min(1, "Venue name is required").max(120),
+  managerName: nameSchema,
+  managerEmail: emailSchema,
+  // Optional: a random temporary password is generated when omitted.
+  managerPassword: z.union([passwordSchema, z.literal("")]).optional(),
+});
 
-  const body = await req.json();
-  const { tenantName, managerName, managerEmail, managerPassword } = body;
+// POST /api/admin/tenants — create a venue and its first manager account
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
+  const body = await parseBody(req, createSchema);
 
-  if (!tenantName || !managerName || !managerEmail || !managerPassword) {
-    return NextResponse.json({ error: "All fields required" }, { status: 400 });
-  }
+  const existing = await prisma.user.findUnique({ where: { email: body.managerEmail }, select: { id: true } });
+  if (existing) throw new ApiError(409, "Email already in use");
 
-  const existing = await prisma.user.findUnique({ where: { email: managerEmail } });
-  if (existing) return NextResponse.json({ error: "Email already in use" }, { status: 409 });
-
-  const passwordHash = await bcrypt.hash(managerPassword, 12);
-
+  const temporaryPassword = body.managerPassword || generateTemporaryPassword();
   const tenant = await prisma.tenant.create({
     data: {
-      name: tenantName,
+      name: body.tenantName,
       users: {
         create: {
-          email: managerEmail,
-          passwordHash,
-          name: managerName,
+          email: body.managerEmail,
+          passwordHash: await hashPassword(temporaryPassword),
+          name: body.managerName,
           role: "MANAGER",
+          mustChangePassword: true,
         },
       },
     },
-    include: { users: true },
+    include: { users: { select: { id: true, name: true, email: true } } },
   });
 
-  return NextResponse.json({ tenantId: tenant.id, tenantName: tenant.name }, { status: 201 });
-}
+  await audit(user, {
+    action: "venue.created",
+    targetType: "venue",
+    targetId: tenant.id,
+    tenantId: tenant.id,
+    summary: `${user.name} created venue "${tenant.name}" with manager ${body.managerEmail}`,
+  });
+
+  const welcomeEmailSent = await sendWelcomeEmail(tenant.users[0], baseUrlFrom(req.headers));
+
+  return NextResponse.json(
+    { tenantId: tenant.id, tenantName: tenant.name, managerEmail: body.managerEmail, temporaryPassword, welcomeEmailSent },
+    { status: 201 }
+  );
+});

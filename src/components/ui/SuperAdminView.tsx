@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import StatsCard from "@/components/ui/StatsCard";
 import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 import Link from "next/link";
 import ModuleEditorModal, { ModuleDraft } from "@/components/ui/ModuleEditorModal";
+import AuditLogPanel from "@/components/ui/AuditLogPanel";
+import InquiriesPanel from "@/components/ui/InquiriesPanel";
+import EditUserModal, { EditableUser } from "@/components/ui/EditUserModal";
 
 interface TenantUser {
   id: string;
@@ -40,6 +43,7 @@ interface TenantData {
   id: string;
   name: string;
   createdAt: string;
+  archivedAt?: string | null;
   userCount: number;
   moduleCount: number;
   users?: TenantUser[];
@@ -55,6 +59,8 @@ interface PlatformUser {
   tenantId: string | null;
   tenantName: string;
   createdAt: string;
+  deactivatedAt: string | null;
+  mustChangePassword?: boolean;
   certificatesCount: number;
   quizAttemptsCount: number;
   watchCount: number;
@@ -69,6 +75,9 @@ interface AdminModuleData {
   orderIndex: number;
   questionCount: number;
   completionsCount: number;
+  published?: boolean;
+  durationSeconds?: number | null;
+  validityMonths?: number | null;
   tenant?: { id: string; name: string };
   questions?: {
     id: string;
@@ -110,6 +119,14 @@ export default function SuperAdminView() {
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState<"ALL" | "MANAGER" | "STAFF">("ALL");
   const [userTenantFilter, setUserTenantFilter] = useState<string>("ALL");
+  const [userStatusFilter, setUserStatusFilter] = useState<"active" | "former">("active");
+
+  // People management
+  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [userActionId, setUserActionId] = useState<string | null>(null);
+
+  // Modules whose video length was already sent to the server this session.
+  const durationReported = useRef(new Set<string>());
 
   // Deletion state
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -118,14 +135,14 @@ export default function SuperAdminView() {
   const [tenantName, setTenantName] = useState("");
   const [managerName, setManagerName] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
-  const [managerPassword, setManagerPassword] = useState("manager123");
+  const [managerPassword, setManagerPassword] = useState("");
   const [provisioning, setProvisioning] = useState(false);
 
   // User/Manager Provisioning Modal states
   const [isProvisionUserModalOpen, setIsProvisionUserModalOpen] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserPassword, setNewUserPassword] = useState("manager123");
+  const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState<"MANAGER" | "STAFF">("MANAGER");
   const [newUserTenantId, setNewUserTenantId] = useState("");
   const [provisionUserError, setProvisionUserError] = useState<string | null>(null);
@@ -140,21 +157,21 @@ export default function SuperAdminView() {
       const data = await res.json();
       setTenants(Array.isArray(data) ? data : []);
       // If none expanded yet, auto-expand the first tenant so employees are immediately visible
-      if (Array.isArray(data) && data.length > 0 && !expandedTenantId) {
-        setExpandedTenantId(data[0].id);
+      if (Array.isArray(data) && data.length > 0) {
+        setExpandedTenantId((prev) => prev ?? data[0].id);
       }
     } catch (err) {
       setError(String(err));
     } finally {
       setLoadingTenants(false);
     }
-  }, [expandedTenantId]);
+  }, []);
 
   // Load Platform Users (Managers and Staff across all venues)
   const loadUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
-      const res = await fetch("/api/admin/users", { cache: "no-store" });
+      const res = await fetch(`/api/admin/users?status=${userStatusFilter}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
@@ -163,7 +180,7 @@ export default function SuperAdminView() {
     } finally {
       setLoadingUsers(false);
     }
-  }, []);
+  }, [userStatusFilter]);
 
   // Load Modules across all tenants
   const loadModules = useCallback(async () => {
@@ -184,10 +201,19 @@ export default function SuperAdminView() {
   }, [moduleTenantFilter]);
 
   useEffect(() => {
-    loadTenants();
-    loadUsers();
-    loadModules();
-  }, [loadTenants, loadUsers, loadModules]);
+    const timer = setTimeout(loadTenants, 0);
+    return () => clearTimeout(timer);
+  }, [loadTenants]);
+
+  useEffect(() => {
+    const timer = setTimeout(loadUsers, 0);
+    return () => clearTimeout(timer);
+  }, [loadUsers]);
+
+  useEffect(() => {
+    const timer = setTimeout(loadModules, 0);
+    return () => clearTimeout(timer);
+  }, [loadModules]);
 
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,11 +238,13 @@ export default function SuperAdminView() {
         throw new Error(data.error || "Failed to provision tenant.");
       }
 
-      setSuccessMsg(`Venue "${data.tenantName}" successfully provisioned with manager account.`);
+      setSuccessMsg(
+        `Venue "${data.tenantName}" created. Manager sign-in: ${data.managerEmail} with temporary password ${data.temporaryPassword} (shown once; they must change it at first sign-in).${data.welcomeEmailSent ? " A welcome email with a set-password link was also sent." : ""}`
+      );
       setTenantName("");
       setManagerName("");
       setManagerEmail("");
-      setManagerPassword("manager123");
+      setManagerPassword("");
       loadTenants();
       loadUsers();
     } catch (err: unknown) {
@@ -248,11 +276,13 @@ export default function SuperAdminView() {
         throw new Error(data.error || "Failed to provision user.");
       }
 
-      setSuccessMsg(`User "${newUserName}" successfully provisioned.`);
+      setSuccessMsg(
+        `${data.user.name} added. Sign-in: ${data.user.email} with temporary password ${data.temporaryPassword} (shown once; they must change it at first sign-in).${data.welcomeEmailSent ? " A welcome email with a set-password link was also sent." : ""}`
+      );
       setIsProvisionUserModalOpen(false);
       setNewUserName("");
       setNewUserEmail("");
-      setNewUserPassword("manager123");
+      setNewUserPassword("");
       loadUsers();
       loadTenants();
     } catch (err: unknown) {
@@ -262,25 +292,39 @@ export default function SuperAdminView() {
     }
   };
 
-  const handleDeleteTenant = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete "${name}"? This cascades all staff, modules, and certificates.`)) {
-      return;
-    }
-
+  const updateTenant = async (id: string, body: { name?: string; archived?: boolean }, success: string) => {
     setDeletingId(id);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/tenants/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/tenants/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to delete tenant");
-      setSuccessMsg(`Tenant "${name}" successfully deleted.`);
+      if (!res.ok) throw new Error(data.error || "Failed to update venue");
+      setSuccessMsg(success);
       loadTenants();
       loadUsers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error deleting tenant");
+      setError(err instanceof Error ? err.message : "Error updating venue");
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleSetTenantArchived = (id: string, name: string, archived: boolean) => {
+    const question = archived
+      ? `Archive "${name}"? Its managers and staff will no longer be able to sign in. All training records and certificates are kept, and you can restore the venue later.`
+      : `Restore "${name}"? Its managers and staff will be able to sign in again.`;
+    if (!confirm(question)) return;
+    updateTenant(id, { archived }, archived ? `"${name}" archived. Records kept.` : `"${name}" restored.`);
+  };
+
+  const handleRenameTenant = (id: string, name: string) => {
+    const next = prompt(`Rename "${name}" to:`, name)?.trim();
+    if (!next || next === name) return;
+    updateTenant(id, { name: next }, `Renamed "${name}" to "${next}".`);
   };
 
   // Switch to users tab filtered by a specific restaurant
@@ -303,12 +347,15 @@ export default function SuperAdminView() {
       videoUrl: mod.videoUrl,
       tenantId: mod.tenantId,
       questions: mod.questions || [],
+      published: mod.published ?? true,
+      validityMonths: mod.validityMonths ?? null,
+      durationSeconds: mod.durationSeconds ?? null,
     });
     setIsModuleModalOpen(true);
   };
 
   const handleDeleteModule = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to permanently delete module "${title}" and its quiz questions?`)) {
+    if (!confirm(`Remove "${title}"? If anyone has started it, it is archived (hidden from staff, records kept); otherwise it is deleted.`)) {
       return;
     }
     setDeletingModuleId(id);
@@ -317,7 +364,7 @@ export default function SuperAdminView() {
       const res = await fetch(`/api/admin/modules/${id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete module");
-      setSuccessMsg(`Module "${title}" deleted successfully.`);
+      setSuccessMsg(data.archived ? `"${title}" archived. Its training records are kept.` : `"${title}" deleted.`);
       loadModules();
       loadTenants();
     } catch (err: unknown) {
@@ -325,6 +372,105 @@ export default function SuperAdminView() {
     } finally {
       setDeletingModuleId(null);
     }
+  };
+
+  const handleMoveModule = async (id: string, direction: "up" | "down") => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/modules/${id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reorder module");
+      loadModules();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error reordering module");
+    }
+  };
+
+  // The server needs each video's real length to measure watch progress. Existing
+  // modules may not have it yet, so it is recorded the first time a preview loads.
+  const handleVideoMetadata = (mod: AdminModuleData, seconds: number) => {
+    if (mod.durationSeconds || !Number.isFinite(seconds) || seconds <= 0) return;
+    if (durationReported.current.has(mod.id)) return;
+    durationReported.current.add(mod.id);
+    fetch(`/api/admin/modules/${mod.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ durationSeconds: Math.round(seconds * 10) / 10 }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          setModules((prev) => prev.map((m) => (m.id === mod.id ? { ...m, durationSeconds: seconds } : m)));
+        }
+      })
+      .catch(() => durationReported.current.delete(mod.id));
+  };
+
+  // ── People ────────────────────────────────────────────────────────────────
+  const runUserAction = async (userId: string, action: () => Promise<string>) => {
+    setUserActionId(userId);
+    setError(null);
+    try {
+      setSuccessMsg(await action());
+      loadUsers();
+      loadTenants();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUserActionId(null);
+    }
+  };
+
+  const handleResetUserPassword = (u: PlatformUser) => {
+    if (!confirm(`Reset the password for ${u.name}? They will be signed out everywhere and must choose a new password.`)) return;
+    runUserAction(u.id, async () => {
+      const res = await fetch("/api/manager/staff/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: u.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reset password");
+      return data.temporaryPassword
+        ? `Password reset for ${u.name}. Temporary password (shown once): ${data.temporaryPassword}`
+        : data.message;
+    });
+  };
+
+  const handleSetUserActive = (u: PlatformUser, active: boolean) => {
+    const question = active
+      ? `Reactivate ${u.name}? They will be able to sign in again.`
+      : `Deactivate ${u.name}? They can no longer sign in. Their training records are kept.`;
+    if (!confirm(question)) return;
+    runUserAction(u.id, async () => {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update account");
+      return active ? `${u.name} reactivated.` : `${u.name} deactivated.`;
+    });
+  };
+
+  const handleEraseUser = (u: PlatformUser) => {
+    if (
+      !confirm(
+        `Erase ${u.name}'s personal data? Their name, email and password are permanently removed. Training records stay, shown as "Former staff member". This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    runUserAction(u.id, async () => {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to erase personal data");
+      return "Personal data erased.";
+    });
   };
 
   // Metrics
@@ -410,6 +556,26 @@ export default function SuperAdminView() {
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      ),
+    },
+    {
+      id: "inquiries",
+      label: "Kit Inquiries",
+      description: "Reservations submitted from the public website",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      ),
+    },
+    {
+      id: "activity",
+      label: "Activity Log",
+      description: "Every account, password, training and curriculum change",
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       ),
     },
@@ -559,6 +725,11 @@ export default function SuperAdminView() {
                                 </span>
                                 <div>
                                   <span className="text-sm">{t.name}</span>
+                                  {t.archivedAt && (
+                                    <span className="ml-2 rounded-full border border-amber-500/30 bg-amber-950/40 px-2 py-0.5 text-[10px] font-semibold text-amber-300 align-middle">
+                                      Archived
+                                    </span>
+                                  )}
                                   <span className="block text-[11px] text-neutral-400 font-normal">
                                     {isExpanded ? "Click to collapse" : "Click to view employees"}
                                   </span>
@@ -611,16 +782,36 @@ export default function SuperAdminView() {
                                   </button>
 
                                   <button
-                                    onClick={() => handleDeleteTenant(t.id, t.name)}
+                                    onClick={() => handleRenameTenant(t.id, t.name)}
                                     disabled={deletingId === t.id}
-                                    className="rounded-lg bg-red-950/40 hover:bg-red-950/70 border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 transition font-medium disabled:opacity-50 inline-flex items-center gap-1"
-                                    title="Delete venue"
+                                    className="rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:text-white transition disabled:opacity-50"
+                                    title="Rename venue"
                                   >
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    <span>{deletingId === t.id ? "..." : "Delete"}</span>
+                                    Rename
                                   </button>
+
+                                  {t.archivedAt ? (
+                                    <button
+                                      onClick={() => handleSetTenantArchived(t.id, t.name, false)}
+                                      disabled={deletingId === t.id}
+                                      className="rounded-lg bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/20 px-2.5 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition font-medium disabled:opacity-50"
+                                      title="Restore venue"
+                                    >
+                                      {deletingId === t.id ? "..." : "Restore"}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleSetTenantArchived(t.id, t.name, true)}
+                                      disabled={deletingId === t.id}
+                                      className="rounded-lg bg-red-950/40 hover:bg-red-950/70 border border-red-500/20 px-2.5 py-1.5 text-xs text-red-400 hover:text-red-300 transition font-medium disabled:opacity-50 inline-flex items-center gap-1"
+                                      title="Archive venue: sign-ins blocked, records kept"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                      </svg>
+                                      <span>{deletingId === t.id ? "..." : "Archive"}</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -898,10 +1089,10 @@ export default function SuperAdminView() {
                 />
                 <input
                   type="text"
-                  required
+                  minLength={12}
                   value={managerPassword}
                   onChange={(e) => setManagerPassword(e.target.value)}
-                  placeholder="Manager Password..."
+                  placeholder="Temporary password (blank = generate)"
                   className="rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 font-mono"
                 />
                 <button
@@ -1094,6 +1285,7 @@ export default function SuperAdminView() {
                           <video
                             src={mod.videoUrl}
                             preload="metadata"
+                            onLoadedMetadata={(e) => handleVideoMetadata(mod, e.currentTarget.duration)}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 pointer-events-none" />
@@ -1123,6 +1315,11 @@ export default function SuperAdminView() {
                             <span className="font-mono text-[10px] text-neutral-400 truncate max-w-[180px]">
                               {mod.videoUrl.split("/").pop()}
                             </span>
+                            {mod.published === false && (
+                              <span className="rounded-full bg-neutral-900/90 border border-neutral-600 px-2 py-0.5 text-[10px] font-semibold text-neutral-300">
+                                Draft
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1135,6 +1332,11 @@ export default function SuperAdminView() {
                             <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
                               {mod.description || "Comprehensive safety & compliance training protocol."}
                             </p>
+                            {!mod.durationSeconds && (
+                              <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2.5 py-1.5 text-[11px] text-amber-200">
+                                Video length not confirmed yet. Staff can&apos;t complete this module until the video loads here once.
+                              </p>
+                            )}
                           </div>
 
                           {/* Stats Indicators */}
@@ -1158,6 +1360,26 @@ export default function SuperAdminView() {
 
                           {/* Action Buttons */}
                           <div className="pt-2 flex items-center gap-2">
+                            {moduleTenantFilter !== "ALL" && (
+                              <div className="flex flex-col gap-1">
+                                <button
+                                  onClick={() => handleMoveModule(mod.id, "up")}
+                                  className="rounded-md border border-neutral-700 bg-neutral-900 px-1.5 text-[10px] leading-4 text-neutral-400 hover:text-white"
+                                  aria-label={`Move ${mod.title} earlier`}
+                                  title="Move earlier in the sequence"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  onClick={() => handleMoveModule(mod.id, "down")}
+                                  className="rounded-md border border-neutral-700 bg-neutral-900 px-1.5 text-[10px] leading-4 text-neutral-400 hover:text-white"
+                                  aria-label={`Move ${mod.title} later`}
+                                  title="Move later in the sequence"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            )}
                             <button
                               onClick={() => handleOpenEditModule(mod)}
                               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600 hover:text-white text-blue-300 px-3 py-2 text-xs font-semibold transition"
@@ -1172,7 +1394,7 @@ export default function SuperAdminView() {
                               onClick={() => handleDeleteModule(mod.id, mod.title)}
                               disabled={deletingModuleId === mod.id}
                               className="inline-flex items-center justify-center rounded-xl border border-red-500/30 bg-red-950/20 hover:bg-red-900/40 text-red-400 p-2 text-xs font-semibold transition disabled:opacity-50"
-                              title="Delete Module"
+                              title="Remove module (archived if anyone has started it)"
                             >
                               {deletingModuleId === mod.id ? (
                                 <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -1266,6 +1488,26 @@ export default function SuperAdminView() {
               ))}
             </div>
 
+            {/* Account status */}
+            <div className="flex items-center gap-2" role="tablist" aria-label="Account status">
+              <span className="text-xs text-neutral-400 font-semibold shrink-0">Accounts:</span>
+              {(["active", "former"] as const).map((status) => (
+                <button
+                  key={status}
+                  role="tab"
+                  aria-selected={userStatusFilter === status}
+                  onClick={() => setUserStatusFilter(status)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition border ${
+                    userStatusFilter === status
+                      ? "bg-blue-600 border-blue-400 text-white shadow-sm"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white"
+                  }`}
+                >
+                  {status === "active" ? "Active" : "Former (deactivated)"}
+                </button>
+              ))}
+            </div>
+
             {/* Search & Role Filter Bar */}
             <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-4 md:p-6 space-y-4 shadow-xl">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1288,7 +1530,7 @@ export default function SuperAdminView() {
                   </label>
                   <select
                     value={userRoleFilter}
-                    onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                    onChange={(e) => setUserRoleFilter(e.target.value as "ALL" | "MANAGER" | "STAFF")}
                     className="w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2 text-xs text-white outline-none focus:border-blue-500"
                   >
                     <option value="ALL">All Roles ({totalManagers + totalStaff})</option>
@@ -1336,6 +1578,7 @@ export default function SuperAdminView() {
                         <th className="px-6 py-3.5">Assigned Organization</th>
                         <th className="px-6 py-3.5">Certificates Earned</th>
                         <th className="px-6 py-3.5">Account Created</th>
+                        <th className="px-6 py-3.5 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1392,6 +1635,60 @@ export default function SuperAdminView() {
                           </td>
                           <td className="px-6 py-4 text-xs text-neutral-400">
                             {new Date(u.createdAt).toLocaleDateString()}
+                            {u.deactivatedAt && (
+                              <span className="block text-amber-400">Left {new Date(u.deactivatedAt).toLocaleDateString()}</span>
+                            )}
+                            {u.mustChangePassword && !u.deactivatedAt && (
+                              <span className="block text-neutral-500">Temporary password</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                              {u.deactivatedAt ? (
+                                <>
+                                  <button
+                                    onClick={() => handleSetUserActive(u, true)}
+                                    disabled={userActionId === u.id}
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-emerald-400 hover:border-emerald-500/40 transition disabled:opacity-50"
+                                  >
+                                    Reactivate
+                                  </button>
+                                  <button
+                                    onClick={() => handleEraseUser(u)}
+                                    disabled={userActionId === u.id}
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-red-400/80 hover:border-red-500/40 hover:text-red-300 transition disabled:opacity-50"
+                                  >
+                                    Erase data
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      setEditingUser({ id: u.id, name: u.name, email: u.email, role: u.role, tenantId: u.tenantId })
+                                    }
+                                    disabled={userActionId === u.id}
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-300 hover:border-neutral-600 hover:text-white transition disabled:opacity-50"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleResetUserPassword(u)}
+                                    disabled={userActionId === u.id}
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-amber-500/40 hover:text-amber-300 transition disabled:opacity-50"
+                                  >
+                                    Password
+                                  </button>
+                                  <button
+                                    onClick={() => handleSetUserActive(u, false)}
+                                    disabled={userActionId === u.id}
+                                    className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-[11px] font-medium text-red-400/80 hover:border-red-500/40 hover:text-red-300 transition disabled:opacity-50"
+                                  >
+                                    Deactivate
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1406,6 +1703,45 @@ export default function SuperAdminView() {
         {/* ======================================================== */}
         {/* TAB 3: PLATFORM OVERVIEW                                  */}
         {/* ======================================================== */}
+        {activeTab === "inquiries" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Kit Inquiries</h1>
+              <p className="text-xs md:text-sm text-neutral-400 mt-1">
+                Salt slab kit reservations from the public website. Contact each one, then close it.
+              </p>
+            </div>
+            <InquiriesPanel />
+          </div>
+        )}
+
+        {activeTab === "activity" && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Activity Log</h1>
+                <p className="text-xs md:text-sm text-neutral-400 mt-1">
+                  Who changed accounts, passwords, training records, venues and curriculums.
+                </p>
+              </div>
+              <select
+                aria-label="Filter activity by venue"
+                value={userTenantFilter}
+                onChange={(e) => setUserTenantFilter(e.target.value)}
+                className="rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2 text-xs text-white outline-none focus:border-blue-500"
+              >
+                <option value="ALL">All venues</option>
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <AuditLogPanel key={userTenantFilter} tenantId={userTenantFilter === "ALL" ? undefined : userTenantFilter} />
+          </div>
+        )}
+
         {activeTab === "overview" && (
           <div className="space-y-8 animate-in fade-in duration-200">
             <div>
@@ -1598,14 +1934,14 @@ export default function SuperAdminView() {
 
                 <div>
                   <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-1">
-                    Initial Password
+                    Temporary Password (optional)
                   </label>
                   <input
                     type="text"
-                    required
+                    minLength={12}
                     value={newUserPassword}
                     onChange={(e) => setNewUserPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
+                    placeholder="Blank = generate one (min 12 characters if set)"
                     className="w-full rounded-xl border border-neutral-700 bg-neutral-800 px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 font-mono"
                   />
                   <p className="text-[10px] text-neutral-500 mt-1">
@@ -1635,17 +1971,35 @@ export default function SuperAdminView() {
         )}
 
         {/* Module & Quiz Authoring Modal (Super Admin Exclusive Authority) */}
-        <ModuleEditorModal
-          isOpen={isModuleModalOpen}
-          onClose={() => setIsModuleModalOpen(false)}
-          onSaved={() => {
-            loadModules();
-            loadTenants();
-          }}
-          initialModule={editingModule}
-          tenants={tenants}
-          defaultTenantId={moduleTenantFilter !== "ALL" ? moduleTenantFilter : undefined}
-        />
+        {/* Remounted on every open so the form starts from the selected module. */}
+        {isModuleModalOpen && (
+          <ModuleEditorModal
+            key={editingModule?.id ?? "new"}
+            isOpen
+            onClose={() => setIsModuleModalOpen(false)}
+            onSaved={() => {
+              loadModules();
+              loadTenants();
+            }}
+            initialModule={editingModule}
+            tenants={tenants.filter((t) => !t.archivedAt)}
+            defaultTenantId={moduleTenantFilter !== "ALL" ? moduleTenantFilter : undefined}
+          />
+        )}
+
+        {editingUser && (
+          <EditUserModal
+            user={editingUser}
+            tenants={tenants}
+            onClose={() => setEditingUser(null)}
+            onSaved={(message) => {
+              setEditingUser(null);
+              setSuccessMsg(message);
+              loadUsers();
+              loadTenants();
+            }}
+          />
+        )}
       </div>
     </PortalLayout>
   );

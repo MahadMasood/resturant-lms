@@ -1,119 +1,121 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { moduleUpdateSchema } from "@/lib/validation";
+import { audit } from "@/lib/audit";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Only Super Admin can access curriculum management." }, { status: 403 });
-  }
+type Params = { params: Promise<{ id: string }> };
 
+async function requireModule(id: string) {
+  const module_ = await prisma.module.findUnique({ where: { id }, include: { questions: true } });
+  if (!module_) throw new ApiError(404, "Module not found");
+  return module_;
+}
+
+type QuestionShape = { questionText: string; options: unknown; correctAnswer: number };
+
+function sameQuestions(a: QuestionShape[], b: QuestionShape[]): boolean {
+  const key = (qs: QuestionShape[]) =>
+    JSON.stringify(qs.map((q) => [q.questionText, q.options, q.correctAnswer]));
+  return key(a) === key(b);
+}
+
+// GET /api/admin/modules/[id]
+export const GET = api(async (req: NextRequest, { params }: Params) => {
+  await requireUser({ roles: ["SUPER_ADMIN"] });
   const { id } = await params;
   const module_ = await prisma.module.findUnique({
     where: { id },
     include: {
       tenant: { select: { id: true, name: true } },
-      questions: {
-        select: {
-          id: true,
-          questionText: true,
-          options: true,
-          correctAnswer: true,
-        },
-      },
+      questions: { select: { id: true, questionText: true, options: true, correctAnswer: true } },
     },
   });
+  if (!module_) throw new ApiError(404, "Module not found");
+  return NextResponse.json({ ...module_, published: module_.publishedAt !== null });
+});
 
-  if (!module_) {
-    return NextResponse.json({ error: "Module not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(module_);
-}
-
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Only Super Admin can edit curriculum modules and quizzes." }, { status: 403 });
-  }
-
+// PATCH /api/admin/modules/[id] — edit content, quiz, publishing and validity.
+// Changing the quiz bumps its version; existing certificates keep the version they were earned on.
+export const PATCH = api(async (req: NextRequest, { params }: Params) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
   const { id } = await params;
-  const existing = await prisma.module.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Module not found" }, { status: 404 });
-  }
+  const existing = await requireModule(id);
+  const body = await parseBody(req, moduleUpdateSchema);
 
-  const body = await req.json();
-  const { title, description, videoUrl, tenantId, questions } = body;
+  const quizChanged = body.questions !== undefined && !sameQuestions(existing.questions, body.questions);
 
-  const updated = await prisma.$transaction(async (tx: any) => {
-    const mod = await tx.module.update({
-      where: { id },
-      data: {
-        title: title !== undefined ? title.trim() : existing.title,
-        description: description !== undefined ? (description?.trim() || null) : existing.description,
-        videoUrl: videoUrl !== undefined ? videoUrl.trim() : existing.videoUrl,
-        tenantId: tenantId !== undefined ? tenantId : existing.tenantId,
-      },
-    });
-
-    if (Array.isArray(questions)) {
+  const updated = await prisma.$transaction(async (tx) => {
+    if (quizChanged) {
       await tx.question.deleteMany({ where: { moduleId: id } });
-
-      if (questions.length > 0) {
-        await tx.question.createMany({
-          data: questions.map((q: any) => ({
-            moduleId: id,
-            questionText: q.questionText.trim(),
-            options: q.options.map((o: string) => o.trim() || "Option"),
-            correctAnswer: q.correctAnswer ?? 0,
-          })),
-        });
+      if (body.questions!.length > 0) {
+        await tx.question.createMany({ data: body.questions!.map((q) => ({ ...q, moduleId: id })) });
       }
     }
 
-    return mod;
+    return tx.module.update({
+      where: { id },
+      data: {
+        title: body.title,
+        description: body.description === undefined ? undefined : body.description || null,
+        videoUrl: body.videoUrl,
+        durationSeconds: body.durationSeconds,
+        validityMonths: body.validityMonths,
+        publishedAt:
+          body.published === undefined ? undefined : body.published ? (existing.publishedAt ?? new Date()) : null,
+        quizVersion: quizChanged ? { increment: 1 } : undefined,
+      },
+      include: { questions: true, tenant: { select: { id: true, name: true } } },
+    });
   });
 
-  const full = await prisma.module.findUnique({
-    where: { id },
-    include: { questions: true, tenant: { select: { id: true, name: true } } },
-  });
-
-  return NextResponse.json(full);
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Only Super Admin can delete curriculum modules." }, { status: 403 });
+  // A duration-only update is the dashboard backfilling video length; not worth logging.
+  const onlyDuration = Object.keys(body).every((k) => k === "durationSeconds");
+  if (!onlyDuration) {
+    await audit(user, {
+      action: quizChanged ? "module.quiz_changed" : "module.updated",
+      targetType: "module",
+      targetId: id,
+      tenantId: existing.tenantId,
+      summary: quizChanged
+        ? `${user.name} changed the quiz for "${updated.title}" (now version ${updated.quizVersion})`
+        : `${user.name} updated "${updated.title}"`,
+    });
   }
 
+  return NextResponse.json({ ...updated, published: updated.publishedAt !== null });
+});
+
+// DELETE /api/admin/modules/[id] — modules with training history are archived
+// (hidden, records kept); modules nobody has started are deleted outright.
+export const DELETE = api(async (req: NextRequest, { params }: Params) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
   const { id } = await params;
-  const existing = await prisma.module.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Module not found" }, { status: 404 });
+  const existing = await requireModule(id);
+
+  const [progress, attempts, certificates] = await Promise.all([
+    prisma.watchProgress.count({ where: { moduleId: id } }),
+    prisma.quizAttempt.count({ where: { moduleId: id } }),
+    prisma.certificate.count({ where: { moduleId: id } }),
+  ]);
+  const hasHistory = progress + attempts + certificates > 0;
+
+  if (hasHistory) {
+    await prisma.module.update({ where: { id }, data: { archivedAt: new Date(), publishedAt: null } });
+  } else {
+    await prisma.module.delete({ where: { id } });
   }
 
-  await prisma.$transaction([
-    prisma.question.deleteMany({ where: { moduleId: id } }),
-    prisma.watchProgress.deleteMany({ where: { moduleId: id } }),
-    prisma.quizAttempt.deleteMany({ where: { moduleId: id } }),
-    prisma.certificate.deleteMany({ where: { moduleId: id } }),
-    prisma.module.delete({ where: { id } }),
-  ]);
+  await audit(user, {
+    action: hasHistory ? "module.archived" : "module.deleted",
+    targetType: "module",
+    targetId: id,
+    tenantId: existing.tenantId,
+    summary: hasHistory
+      ? `${user.name} archived "${existing.title}" (training records kept)`
+      : `${user.name} deleted "${existing.title}"`,
+  });
 
-  return NextResponse.json({ success: true, deletedId: id });
-}
+  return NextResponse.json({ success: true, archived: hasHistory, deletedId: id });
+});

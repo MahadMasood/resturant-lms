@@ -1,136 +1,97 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser, venueScope } from "@/lib/session";
+import { idSchema } from "@/lib/validation";
+import { equipmentStatusSchema, equipmentTypeSchema } from "@/lib/equipment";
 
-// GET /api/manager/equipment — list salt slab equipment and health meters
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+const createSchema = z.object({
+  tenantId: idSchema.nullish(),
+  name: z.string().trim().min(1, "Item name is required").max(120),
+  type: equipmentTypeSchema,
+  quantity: z.coerce.number().int().min(1).max(10000).default(1),
+  cooksCount: z.coerce.number().int().min(0).max(100000).default(0),
+  maxCooks: z.coerce.number().int().min(1).max(100000).default(40),
+  status: equipmentStatusSchema.default("ACTIVE"),
+  notes: z.string().trim().max(1000).nullish(),
+});
 
-  // Determine tenantId based on role
-  let tenantId = session.user.tenantId;
-  const urlTenant = req.nextUrl.searchParams.get("tenantId");
+// GET /api/manager/equipment — salt slab equipment and health meters for one venue
+export const GET = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["MANAGER", "SUPER_ADMIN"] });
+  const tenantId = venueScope(user, req.nextUrl.searchParams.get("tenantId"));
+  if (!tenantId) throw new ApiError(400, "Choose a venue");
 
-  if (session.user.role === "SUPER_ADMIN" && urlTenant) {
-    tenantId = urlTenant;
-  }
+  const items = await prisma.equipmentItem.findMany({
+    where: { tenantId },
+    orderBy: [{ type: "asc" }, { updatedAt: "desc" }],
+  });
 
-  if (!tenantId) {
-    return NextResponse.json({ error: "No venue associated with account" }, { status: 400 });
-  }
+  const activeCookingPlates = items.filter((e) => e.type === "COOKING_PLATE" && e.status !== "RETIRED");
 
-  try {
-    const items = await prisma.equipmentItem.findMany({
-      where: { tenantId },
-      orderBy: [{ type: "asc" }, { updatedAt: "desc" }],
-    });
+  const totalCookingPlates = activeCookingPlates.reduce((sum, e) => sum + (e.quantity || 1), 0);
 
-    // Compute metrics
-    const activeCookingPlates = items.filter(
-      (e) => e.type === "COOKING_PLATE" && e.status !== "RETIRED"
-    );
+  const averagePlateHealth =
+    activeCookingPlates.length > 0
+      ? Math.round(
+          activeCookingPlates.reduce((sum, p) => {
+            const max = p.maxCooks || 40;
+            const h = Math.max(0, Math.round(((max - p.cooksCount) / max) * 100));
+            return sum + h;
+          }, 0) / activeCookingPlates.length
+        )
+      : 100;
 
-    const totalCookingPlates = activeCookingPlates.reduce(
-      (sum, e) => sum + (e.quantity || 1),
-      0
-    );
+  const totalMetalRings = items
+    .filter((e) => e.type === "METAL_RING" && e.status !== "RETIRED")
+    .reduce((sum, e) => sum + (e.quantity || 1), 0);
 
-    const averagePlateHealth =
-      activeCookingPlates.length > 0
-        ? Math.round(
-            activeCookingPlates.reduce((sum, p) => {
-              const max = p.maxCooks || 40;
-              const h = Math.max(0, Math.round(((max - p.cooksCount) / max) * 100));
-              return sum + h;
-            }, 0) / activeCookingPlates.length
-          )
-        : 100;
+  const totalServingPlates = items
+    .filter((e) => e.type === "SERVING_PLATE" && e.status !== "RETIRED")
+    .reduce((sum, e) => sum + (e.quantity || 1), 0);
 
-    const totalMetalRings = items
-      .filter((e) => e.type === "METAL_RING" && e.status !== "RETIRED")
-      .reduce((sum, e) => sum + (e.quantity || 1), 0);
+  const nearDepletedCount = items.filter(
+    (e) => e.type === "COOKING_PLATE" && e.cooksCount >= 36 && e.status !== "RETIRED"
+  ).length;
 
-    const totalServingPlates = items
-      .filter((e) => e.type === "SERVING_PLATE" && e.status !== "RETIRED")
-      .reduce((sum, e) => sum + (e.quantity || 1), 0);
+  const retiredCount = items.filter((e) => e.status === "RETIRED").length;
 
-    const nearDepletedCount = items.filter(
-      (e) => e.type === "COOKING_PLATE" && e.cooksCount >= 36 && e.status !== "RETIRED"
-    ).length;
+  return NextResponse.json({
+    items,
+    stats: {
+      totalCookingPlates,
+      averagePlateHealth,
+      totalMetalRings,
+      totalServingPlates,
+      nearDepletedCount,
+      retiredCount,
+    },
+  });
+});
 
-    const retiredCount = items.filter((e) => e.status === "RETIRED").length;
+// POST /api/manager/equipment — add a salt cooking slab, metal ring, or serving plate
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["MANAGER", "SUPER_ADMIN"] });
+  const body = await parseBody(req, createSchema);
+  const tenantId = venueScope(user, body.tenantId);
+  if (!tenantId) throw new ApiError(400, "Choose a venue");
 
-    return NextResponse.json({
-      items,
-      stats: {
-        totalCookingPlates,
-        averagePlateHealth,
-        totalMetalRings,
-        totalServingPlates,
-        nearDepletedCount,
-        retiredCount,
-      },
-    });
-  } catch (err: any) {
-    console.error("GET /api/manager/equipment error:", err);
-    return NextResponse.json({ error: err.message || "Failed to load equipment" }, { status: 500 });
-  }
-}
+  const venue = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+  if (!venue) throw new ApiError(404, "Venue not found");
 
-// POST /api/manager/equipment — add a new salt cooking slab, metal ring, or serving plate
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user || (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const newItem = await prisma.equipmentItem.create({
+    data: {
+      tenantId,
+      name: body.name,
+      type: body.type,
+      quantity: body.quantity,
+      cooksCount: body.cooksCount,
+      maxCooks: body.maxCooks,
+      status: body.status,
+      notes: body.notes || null,
+    },
+  });
 
-  try {
-    const body = await req.json();
-    let tenantId = session.user.tenantId;
-
-    if (session.user.role === "SUPER_ADMIN" && body.tenantId) {
-      tenantId = body.tenantId;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: "Tenant ID required" }, { status: 400 });
-    }
-
-    const { name, type, quantity, cooksCount, maxCooks, status, notes } = body;
-
-    if (!name || typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Item name is required" }, { status: 400 });
-    }
-
-    const validTypes = ["COOKING_PLATE", "METAL_RING", "SERVING_PLATE"];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: "Invalid type. Must be COOKING_PLATE, METAL_RING, or SERVING_PLATE" },
-        { status: 400 }
-      );
-    }
-
-    const validStatuses = ["ACTIVE", "MAINTENANCE", "RETIRED"];
-    const itemStatus = validStatuses.includes(status) ? status : "ACTIVE";
-
-    const newItem = await prisma.equipmentItem.create({
-      data: {
-        tenantId,
-        name: name.trim(),
-        type,
-        quantity: Math.max(1, parseInt(quantity, 10) || 1),
-        cooksCount: Math.max(0, parseInt(cooksCount, 10) || 0),
-        maxCooks: Math.max(1, parseInt(maxCooks, 10) || 40),
-        status: itemStatus,
-        notes: notes?.trim() || null,
-      },
-    });
-
-    return NextResponse.json({ success: true, item: newItem }, { status: 201 });
-  } catch (err: any) {
-    console.error("POST /api/manager/equipment error:", err);
-    return NextResponse.json({ error: err.message || "Failed to create equipment" }, { status: 500 });
-  }
-}
+  return NextResponse.json({ success: true, item: newItem }, { status: 201 });
+});
