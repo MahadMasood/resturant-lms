@@ -18,8 +18,13 @@ const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500MB limit for Cloudflare R2
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Media addition is strictly restricted to Super Admin
+  if (session.user.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Forbidden. Media addition and video uploads are restricted to Super Admin." },
+      { status: 403 }
+    );
   }
 
   try {

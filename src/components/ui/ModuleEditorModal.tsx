@@ -14,6 +14,7 @@ export interface ModuleDraft {
   title: string;
   description: string | null;
   videoUrl: string;
+  tenantId?: string;
   questions?: QuestionDraft[];
 }
 
@@ -22,6 +23,8 @@ interface ModuleEditorModalProps {
   onClose: () => void;
   onSaved: () => void;
   initialModule?: ModuleDraft | null;
+  tenants?: { id: string; name: string }[];
+  defaultTenantId?: string;
 }
 
 export default function ModuleEditorModal({
@@ -29,11 +32,16 @@ export default function ModuleEditorModal({
   onClose,
   onSaved,
   initialModule,
+  tenants,
+  defaultTenantId,
 }: ModuleEditorModalProps) {
   const isEditing = Boolean(initialModule?.id);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(
+    initialModule?.tenantId || defaultTenantId || (tenants && tenants.length > 0 ? tenants[0].id : "ALL")
+  );
   const [videoSourceType, setVideoSourceType] = useState<"file" | "url">("url");
   const [videoUrl, setVideoUrl] = useState("/videos/module1-safety-protocols.mp4");
   const [file, setFile] = useState<File | null>(null);
@@ -57,6 +65,9 @@ export default function ModuleEditorModal({
       setDescription(initialModule.description || "");
       setVideoUrl(initialModule.videoUrl || "/videos/module1-safety-protocols.mp4");
       setVideoSourceType("url");
+      if (initialModule.tenantId) {
+        setSelectedTenantId(initialModule.tenantId);
+      }
 
       if (initialModule.questions && initialModule.questions.length > 0) {
         setQuestions(
@@ -257,6 +268,7 @@ export default function ModuleEditorModal({
         title: title.trim(),
         description: description.trim() || null,
         videoUrl: finalVideoUrl,
+        tenantId: selectedTenantId,
         questions: validQuestions.map((q) => ({
           questionText: q.questionText.trim(),
           options: q.options.map((o) => o.trim() || "Option"),
@@ -265,8 +277,8 @@ export default function ModuleEditorModal({
       };
 
       const url = isEditing
-        ? `/api/manager/modules/${initialModule?.id}`
-        : "/api/manager/modules";
+        ? `/api/admin/modules/${initialModule?.id}`
+        : "/api/admin/modules";
       const method = isEditing ? "PATCH" : "POST";
 
       const res = await fetch(url, {
@@ -298,7 +310,7 @@ export default function ModuleEditorModal({
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/manager/modules/${initialModule.id}`, {
+      const res = await fetch(`/api/admin/modules/${initialModule.id}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -345,6 +357,29 @@ export default function ModuleEditorModal({
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Module Basics */}
           <div className="space-y-4">
+            {tenants && tenants.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+                  Target Restaurant Venue
+                </label>
+                <select
+                  value={selectedTenantId}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">Apply to All Restaurant Venues (Master Curriculum)</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-neutral-500 mt-1">
+                  Centrally authored by Super Admin. Available to all employees at the selected venue.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
                 Module Title

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import StatsCard from "@/components/ui/StatsCard";
 import PortalLayout, { NavTabItem } from "@/components/ui/PortalLayout";
 import Link from "next/link";
+import ModuleEditorModal, { ModuleDraft } from "@/components/ui/ModuleEditorModal";
 
 interface TenantUser {
   id: string;
@@ -59,6 +60,24 @@ interface PlatformUser {
   watchCount: number;
 }
 
+interface AdminModuleData {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string | null;
+  videoUrl: string;
+  orderIndex: number;
+  questionCount: number;
+  completionsCount: number;
+  tenant?: { id: string; name: string };
+  questions?: {
+    id: string;
+    questionText: string;
+    options: string[];
+    correctAnswer: number;
+  }[];
+}
+
 export default function SuperAdminView() {
   const [activeTab, setActiveTab] = useState("venues");
 
@@ -72,6 +91,15 @@ export default function SuperAdminView() {
   // Platform users data (all managers and staff under Super Admin)
   const [users, setUsers] = useState<PlatformUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Curriculums & Quizzes state (Super Admin exclusive authority)
+  const [modules, setModules] = useState<AdminModuleData[]>([]);
+  const [loadingModules, setLoadingModules] = useState(true);
+  const [moduleTenantFilter, setModuleTenantFilter] = useState<string>("ALL");
+  const [moduleSearch, setModuleSearch] = useState("");
+  const [isModuleModalOpen, setIsModuleModalOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState<ModuleDraft | null>(null);
+  const [deletingModuleId, setDeletingModuleId] = useState<string | null>(null);
 
   // Error & Feedback
   const [error, setError] = useState<string | null>(null);
@@ -137,10 +165,29 @@ export default function SuperAdminView() {
     }
   }, []);
 
+  // Load Modules across all tenants
+  const loadModules = useCallback(async () => {
+    try {
+      setLoadingModules(true);
+      const url = moduleTenantFilter !== "ALL"
+        ? `/api/admin/modules?tenantId=${encodeURIComponent(moduleTenantFilter)}`
+        : "/api/admin/modules";
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const data = await res.json();
+      setModules(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load modules:", err);
+    } finally {
+      setLoadingModules(false);
+    }
+  }, [moduleTenantFilter]);
+
   useEffect(() => {
     loadTenants();
     loadUsers();
-  }, [loadTenants, loadUsers]);
+    loadModules();
+  }, [loadTenants, loadUsers, loadModules]);
 
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,12 +289,62 @@ export default function SuperAdminView() {
     setActiveTab("users");
   };
 
+  // Module creation, editing, and deletion handlers (Super Admin only)
+  const handleOpenCreateModule = () => {
+    setEditingModule(null);
+    setIsModuleModalOpen(true);
+  };
+
+  const handleOpenEditModule = (mod: AdminModuleData) => {
+    setEditingModule({
+      id: mod.id,
+      title: mod.title,
+      description: mod.description,
+      videoUrl: mod.videoUrl,
+      tenantId: mod.tenantId,
+      questions: mod.questions || [],
+    });
+    setIsModuleModalOpen(true);
+  };
+
+  const handleDeleteModule = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to permanently delete module "${title}" and its quiz questions?`)) {
+      return;
+    }
+    setDeletingModuleId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/modules/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete module");
+      setSuccessMsg(`Module "${title}" deleted successfully.`);
+      loadModules();
+      loadTenants();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error deleting module");
+    } finally {
+      setDeletingModuleId(null);
+    }
+  };
+
   // Metrics
   const totalManagers = useMemo(() => users.filter((u) => u.role === "MANAGER").length, [users]);
   const totalStaff = useMemo(() => users.filter((u) => u.role === "STAFF").length, [users]);
-  const totalModules = useMemo(() => tenants.reduce((acc, t) => acc + t.moduleCount, 0), [tenants]);
+  const totalModules = useMemo(() => modules.length, [modules]);
 
   // Filtered lists
+  const filteredModules = useMemo(() => {
+    return modules.filter((m) => {
+      const matchesSearch =
+        !moduleSearch.trim() ||
+        m.title.toLowerCase().includes(moduleSearch.toLowerCase()) ||
+        (m.description && m.description.toLowerCase().includes(moduleSearch.toLowerCase())) ||
+        (m.tenant?.name && m.tenant.name.toLowerCase().includes(moduleSearch.toLowerCase()));
+      const matchesTenant = moduleTenantFilter === "ALL" || m.tenantId === moduleTenantFilter;
+      return matchesSearch && matchesTenant;
+    });
+  }, [modules, moduleSearch, moduleTenantFilter]);
+
   const filteredTenants = useMemo(() => {
     if (!tenantSearch.trim()) return tenants;
     const q = tenantSearch.toLowerCase();
@@ -281,6 +378,17 @@ export default function SuperAdminView() {
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+        </svg>
+      ),
+    },
+    {
+      id: "curriculums",
+      label: "Curriculums & Quizzes",
+      description: "Centralized authority: author video modules, Cloudflare R2 media & quizzes",
+      badge: modules.length,
+      icon: (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
       ),
     },
@@ -812,7 +920,284 @@ export default function SuperAdminView() {
         )}
 
         {/* ======================================================== */}
-        {/* TAB 2: ALL MANAGERS & STAFF DIRECTORY (GLOBAL)           */}
+        {/* TAB 2: CURRICULUMS & QUIZZES (SUPER ADMIN EXCLUSIVE)     */}
+        {/* ======================================================== */}
+        {activeTab === "curriculums" && (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[11px] font-semibold text-blue-400 mb-2">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <span>Centralized Super Admin Authority</span>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                  Accreditation Curriculums &amp; Quiz Authority
+                </h1>
+                <p className="text-xs md:text-sm text-neutral-400 mt-1 max-w-3xl">
+                  Authoritative control over all video training modules, Cloudflare R2 media uploads, and multiple-choice certification quizzes across all restaurant venues.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                <button
+                  onClick={loadModules}
+                  className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3.5 py-2.5 text-xs font-semibold text-neutral-300 hover:bg-neutral-800 hover:text-white transition"
+                >
+                  <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Sync Modules</span>
+                </button>
+
+                <button
+                  onClick={handleOpenCreateModule}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-900/30 transition transform active:scale-95"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>+ Create Training Module</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4">
+                <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                  Total Active Modules
+                </div>
+                <div className="text-2xl font-bold text-white mt-1">
+                  {modules.length}
+                </div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">
+                  Across {tenants.length} provisioned venue{tenants.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4">
+                <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                  Accredited Quiz Questions
+                </div>
+                <div className="text-2xl font-bold text-blue-400 mt-1">
+                  {modules.reduce((acc, m) => acc + (m.questionCount || m.questions?.length || 0), 0)}
+                </div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">
+                  Compliance multiple-choice criteria
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-4">
+                <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                  Cloudflare R2 Storage Status
+                </div>
+                <div className="text-2xl font-bold text-amber-400 mt-1 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Connected
+                </div>
+                <div className="text-[11px] text-neutral-500 mt-0.5">
+                  High-speed global edge CDN active
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="rounded-3xl border border-neutral-800 bg-neutral-900 overflow-hidden shadow-2xl p-5 space-y-4">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <svg
+                    className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    value={moduleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    placeholder="Search modules by title, venue, or keywords..."
+                    className="w-full rounded-xl border border-neutral-800 bg-neutral-950 pl-10 pr-4 py-2 text-xs text-white placeholder-neutral-500 outline-none focus:border-blue-500 transition"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+                  <span className="text-[11px] text-neutral-500 font-medium whitespace-nowrap">Target Venue:</span>
+                  <select
+                    value={moduleTenantFilter}
+                    onChange={(e) => setModuleTenantFilter(e.target.value)}
+                    className="rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                  >
+                    <option value="ALL">All Venues</option>
+                    {tenants.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Module Cards Grid */}
+              {loadingModules ? (
+                <div className="p-16 text-center text-xs text-neutral-500 flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  <span>Loading curriculum library and quiz banks...</span>
+                </div>
+              ) : filteredModules.length === 0 ? (
+                <div className="p-16 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-neutral-800/80 border border-neutral-700/60 flex items-center justify-center mx-auto text-neutral-400 mb-3">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-semibold text-white">No modules found</h3>
+                  <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+                    {moduleSearch || moduleTenantFilter !== "ALL"
+                      ? "No modules match the current search or venue filter."
+                      : "Create your first training module and attach video media via Cloudflare R2 along with quiz questions."}
+                  </p>
+                  <button
+                    onClick={handleOpenCreateModule}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white transition"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>+ Create Training Module</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
+                  {filteredModules.map((mod) => {
+                    const isR2 = mod.videoUrl.includes("r2.cloudflarestorage.com") || mod.videoUrl.includes("r2.dev") || mod.videoUrl.includes("r2");
+                    const qCount = mod.questionCount ?? mod.questions?.length ?? 0;
+                    return (
+                      <div
+                        key={mod.id}
+                        className="group flex flex-col justify-between rounded-2xl border border-neutral-800 bg-neutral-950/60 hover:bg-neutral-900/60 hover:border-neutral-700 transition duration-200 overflow-hidden shadow-lg"
+                      >
+                        {/* Video Preview / Header */}
+                        <div className="relative aspect-video bg-neutral-900 overflow-hidden border-b border-neutral-800">
+                          <video
+                            src={mod.videoUrl}
+                            preload="metadata"
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 pointer-events-none" />
+
+                          {/* Top Badges */}
+                          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 pointer-events-none">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-900/90 text-neutral-300 border border-neutral-700/60 truncate max-w-[150px]">
+                              {mod.tenant?.name || "Global / Master"}
+                            </span>
+
+                            {isR2 ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950/90 text-amber-300 border border-amber-600/50 flex items-center gap-1">
+                                <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 00-9.78 2.096A4.001 4.001 0 003 15z" />
+                                </svg>
+                                <span>Cloudflare R2</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-950/90 text-purple-300 border border-purple-600/50">
+                                Hosted Video
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Bottom video stats */}
+                          <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[11px] text-neutral-300 pointer-events-none">
+                            <span className="font-mono text-[10px] text-neutral-400 truncate max-w-[180px]">
+                              {mod.videoUrl.split("/").pop()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                          <div>
+                            <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition line-clamp-1">
+                              {mod.title}
+                            </h3>
+                            <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
+                              {mod.description || "Comprehensive safety & compliance training protocol."}
+                            </p>
+                          </div>
+
+                          {/* Stats Indicators */}
+                          <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-400">
+                            <div className="flex items-center gap-1.5 text-neutral-300">
+                              <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="font-semibold text-white">{qCount}</span>
+                              <span className="text-[11px] text-neutral-500">Quiz Qs</span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 text-neutral-300">
+                              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                              </svg>
+                              <span className="font-semibold text-white">{mod.completionsCount || 0}</span>
+                              <span className="text-[11px] text-neutral-500">Certified</span>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="pt-2 flex items-center gap-2">
+                            <button
+                              onClick={() => handleOpenEditModule(mod)}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600/20 border border-blue-500/30 hover:bg-blue-600 hover:text-white text-blue-300 px-3 py-2 text-xs font-semibold transition"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              <span>Edit &amp; Quiz Builder</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteModule(mod.id, mod.title)}
+                              disabled={deletingModuleId === mod.id}
+                              className="inline-flex items-center justify-center rounded-xl border border-red-500/30 bg-red-950/20 hover:bg-red-900/40 text-red-400 p-2 text-xs font-semibold transition disabled:opacity-50"
+                              title="Delete Module"
+                            >
+                              {deletingModuleId === mod.id ? (
+                                <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                                </svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 3: ALL MANAGERS & STAFF DIRECTORY (GLOBAL)           */}
         {/* ======================================================== */}
         {activeTab === "users" && (
           <div className="space-y-8 animate-in fade-in duration-200">
@@ -1248,6 +1633,19 @@ export default function SuperAdminView() {
             </div>
           </div>
         )}
+
+        {/* Module & Quiz Authoring Modal (Super Admin Exclusive Authority) */}
+        <ModuleEditorModal
+          isOpen={isModuleModalOpen}
+          onClose={() => setIsModuleModalOpen(false)}
+          onSaved={() => {
+            loadModules();
+            loadTenants();
+          }}
+          initialModule={editingModule}
+          tenants={tenants}
+          defaultTenantId={moduleTenantFilter !== "ALL" ? moduleTenantFilter : undefined}
+        />
       </div>
     </PortalLayout>
   );

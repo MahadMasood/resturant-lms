@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import ModuleEditorModal, { ModuleDraft } from "@/components/ui/ModuleEditorModal";
 import InviteStaffModal from "@/components/ui/InviteStaffModal";
 import StaffProgressTable from "@/components/ui/StaffProgressTable";
 import StatsCard from "@/components/ui/StatsCard";
@@ -32,8 +31,6 @@ interface ManagerViewProps {
 export default function ManagerView({ tenantName, managerName }: ManagerViewProps) {
   const [activeTab, setActiveTab] = useState("overview");
 
-  const [isModuleModalOpen, setIsModuleModalOpen] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<ModuleDraft | null>(null);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
 
   const [modules, setModules] = useState<ModuleItem[]>([]);
@@ -66,24 +63,6 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
     loadData();
   }, [loadData]);
 
-  const handleOpenCreateModal = () => {
-    setSelectedModule(null);
-    setIsModuleModalOpen(true);
-  };
-
-  const handleEditModule = async (moduleId: string) => {
-    try {
-      const res = await fetch(`/api/manager/modules/${moduleId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSelectedModule(data);
-        setIsModuleModalOpen(true);
-      }
-    } catch (err) {
-      console.error("Error fetching module details:", err);
-    }
-  };
-
   const handleExportCSV = () => {
     window.location.href = "/api/manager/export/compliance";
   };
@@ -113,8 +92,8 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
     },
     {
       id: "curriculums",
-      label: "Curriculums Library",
-      description: "Course creation, video uploads, and quiz builder",
+      label: "Assigned Curriculums",
+      description: "State-accredited culinary training and evaluation modules",
       badge: modules.length,
       icon: (
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -132,16 +111,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
         </svg>
       ),
     },
-    {
-      id: "onboarding",
-      label: "Staff Onboarding",
-      description: "Invite new employees and manage venue roster",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-        </svg>
-      ),
-    },
+
     {
       id: "export",
       label: "Health Inspector Export",
@@ -187,22 +157,12 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
               <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   onClick={() => setIsStaffModalOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2 text-xs font-semibold text-neutral-200 hover:bg-neutral-800 hover:text-white transition shadow-sm"
-                >
-                  <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                  <span>Onboard Staff</span>
-                </button>
-
-                <button
-                  onClick={handleOpenCreateModal}
                   className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-600/25"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                   </svg>
-                  <span>Create Module</span>
+                  <span>Onboard Staff</span>
                 </button>
               </div>
             </div>
@@ -303,9 +263,9 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <h3 className="text-base font-bold text-white">Curriculum Management</h3>
+                <h3 className="text-base font-bold text-white">Assigned Curriculums</h3>
                 <p className="text-xs text-neutral-400 mt-1">
-                  Upload MP4 video lessons, set sequential order, and configure dynamic accreditation questions.
+                  View standardized culinary video lessons and evaluation quizzes assigned to your restaurant.
                 </p>
               </button>
 
@@ -358,38 +318,33 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
         )}
 
         {/* ======================================================== */}
-        {/* TAB 3: CURRICULUMS & MODULE EDITOR                       */}
+        {/* TAB 3: ASSIGNED CURRICULUMS (READ-ONLY INSPECTION)       */}
         {/* ======================================================== */}
         {activeTab === "curriculums" && (
           <div className="space-y-6 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-white tracking-tight">
-                  Training Curriculums Library
+                  Assigned Compliance Curriculums
                 </h1>
                 <p className="text-xs md:text-sm text-neutral-400 mt-1">
-                  Create video modules, upload MP4 lessons, and configure multiple-choice accreditation evaluations.
+                  Official state-accredited training modules and evaluations. Centrally governed by Super Admin.
                 </p>
               </div>
 
-              <button
-                onClick={handleOpenCreateModal}
-                className="inline-flex items-center gap-2 self-start sm:self-auto rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-lg shadow-blue-600/25"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                <span>+ Create Training Module</span>
-              </button>
+              <div className="inline-flex items-center gap-2 self-start sm:self-auto rounded-xl border border-blue-500/30 bg-blue-950/40 px-3.5 py-2 text-xs font-semibold text-blue-400">
+                <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
+                <span>Super Admin Governed Library</span>
+              </div>
             </div>
 
             <div className="rounded-3xl border border-neutral-800 bg-neutral-900/90 p-6 md:p-8 space-y-5 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
                 <span className="text-sm font-bold uppercase tracking-wider text-neutral-300">
-                  Published Modules ({modules.length})
+                  Published Venue Modules ({modules.length})
                 </span>
-                <span className="text-xs text-neutral-500">
-                  Sequential Progression Active
+                <span className="text-xs text-neutral-400">
+                  Sequential High-Water Mark &bull; 80% Passing Required
                 </span>
               </div>
 
@@ -399,7 +354,7 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
                 </div>
               ) : modules.length === 0 ? (
                 <div className="p-12 text-center text-xs text-neutral-500">
-                  No modules created yet. Click &quot;+ Create Training Module&quot; to publish your first video lesson.
+                  No modules assigned to this venue yet. Your platform Super Admin will publish modules here.
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -431,22 +386,19 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
                       </div>
 
                       <div className="flex items-center justify-between border-t border-neutral-800/80 pt-3 text-xs text-neutral-400">
-                        <span className="flex items-center gap-1.5 text-neutral-400">
-                          <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <span className="flex items-center gap-1.5 text-neutral-300">
+                          <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {m.questionCount} Questions
+                          <span>{m.questionCount} Quiz Questions</span>
                         </span>
 
-                        <button
-                          onClick={() => handleEditModule(m.id)}
-                          className="flex items-center gap-1 text-xs text-neutral-200 hover:text-white transition font-medium rounded-lg bg-neutral-800/80 px-3 py-1.5 border border-neutral-700/60"
-                        >
-                          <svg className="w-3.5 h-3.5 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        <span className="inline-flex items-center gap-1 text-[11px] text-neutral-400">
+                          <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                           </svg>
-                          <span>Edit &amp; Quiz Builder</span>
-                        </button>
+                          <span>Accredited</span>
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -624,13 +576,6 @@ export default function ManagerView({ tenantName, managerName }: ManagerViewProp
       </div>
 
       {/* Modals */}
-      <ModuleEditorModal
-        isOpen={isModuleModalOpen}
-        onClose={() => setIsModuleModalOpen(false)}
-        onSaved={loadData}
-        initialModule={selectedModule}
-      />
-
       <InviteStaffModal
         isOpen={isStaffModalOpen}
         onClose={() => setIsStaffModalOpen(false)}

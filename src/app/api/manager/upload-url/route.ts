@@ -6,12 +6,13 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
-  if (session.user.role !== "SUPER_ADMIN" && !session.user.tenantId) {
-    return NextResponse.json({ error: "No tenant assigned" }, { status: 400 });
+  // Media addition is strictly restricted to Super Admin
+  if (session.user.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Forbidden. Media addition and video uploads are restricted to Super Admin." },
+      { status: 403 }
+    );
   }
 
   let r2Endpoint = process.env.R2_ENDPOINT?.trim();
