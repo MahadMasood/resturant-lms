@@ -1,19 +1,17 @@
 export const instant = false;
 
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/session";
 import ManagerView from "@/components/ui/ManagerView";
 
 export default async function ManagerDashboard() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?reason=session");
+  if (user.mustChangePassword) redirect("/change-password");
 
-  if (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN") {
+  if (user.role !== "MANAGER" && user.role !== "SUPER_ADMIN") {
     redirect("/dashboard/staff");
   }
 
-  const tenantName = session.user.tenantName || "Restaurant";
-  const managerName = session.user.name || "Manager";
-
-  return <ManagerView tenantName={tenantName} managerName={managerName} />;
+  return <ManagerView tenantName={user.tenantName || "Restaurant"} managerName={user.name} />;
 }

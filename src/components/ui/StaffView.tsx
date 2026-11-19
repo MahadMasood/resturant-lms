@@ -9,7 +9,7 @@ interface StaffModuleItem {
   id: string;
   title: string;
   description: string | null;
-  videoUrl: string;
+  videoUrl: string | null;
   orderIndex?: number;
   questionCount?: number;
   watchedSeconds: number;
@@ -19,6 +19,9 @@ interface StaffModuleItem {
   quizScore: number | null;
   attemptsCount?: number;
   certificateUrl: string | null;
+  certificateStatus?: "valid" | "expired" | "revoked" | null;
+  certificateExpiresAt?: string | null;
+  quizEligible?: boolean;
   isLocked?: boolean;
   requiredPreviousTitle?: string | null;
 }
@@ -28,8 +31,30 @@ interface CertificateItem {
   moduleId: string;
   moduleName: string;
   pdfUrl: string;
+  verificationCode: string;
   issuedAt: string;
+  expiresAt: string | null;
+  status: "valid" | "expired" | "revoked";
 }
+
+async function fetchTrainingData(): Promise<{ modules: StaffModuleItem[] | null; certificates: CertificateItem[] | null }> {
+  const [modRes, certRes] = await Promise.all([
+    fetch("/api/staff/modules", { cache: "no-store" }),
+    fetch("/api/staff/certificates", { cache: "no-store" }),
+  ]);
+  const modules = modRes.ok ? await modRes.json() : null;
+  const certificates = certRes.ok ? await certRes.json() : null;
+  return {
+    modules: Array.isArray(modules) ? modules : null,
+    certificates: Array.isArray(certificates) ? certificates : null,
+  };
+}
+
+const CERT_STATUS_STYLES: Record<CertificateItem["status"], { label: string; className: string }> = {
+  valid: { label: "Valid Certificate", className: "text-emerald-400" },
+  expired: { label: "Expired · Renew Required", className: "text-amber-400" },
+  revoked: { label: "Revoked", className: "text-red-400" },
+};
 
 interface StaffViewProps {
   staffName: string;
@@ -46,31 +71,35 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
   const [loading, setLoading] = useState(true);
   const [moduleFilter, setModuleFilter] = useState<ModuleFilterType>("all");
 
-  const loadData = useCallback(async () => {
-    try {
-      const [modRes, certRes] = await Promise.all([
-        fetch("/api/staff/modules", { cache: "no-store" }),
-        fetch("/api/staff/certificates", { cache: "no-store" }),
-      ]);
-
-      if (modRes.ok) {
-        const modData = await modRes.json();
-        setModules(Array.isArray(modData) ? modData : []);
-      }
-      if (certRes.ok) {
-        const certData = await certRes.json();
-        setCertificates(Array.isArray(certData) ? certData : []);
-      }
-    } catch (err) {
-      console.error("Failed to load staff training data:", err);
-    } finally {
-      setLoading(false);
-    }
+  const applyData = useCallback((data: Awaited<ReturnType<typeof fetchTrainingData>>) => {
+    if (data.modules) setModules(data.modules);
+    if (data.certificates) setCertificates(data.certificates);
+    setLoading(false);
   }, []);
 
+  const loadData = useCallback(async () => {
+    try {
+      applyData(await fetchTrainingData());
+    } catch (err) {
+      console.error("Failed to load staff training data:", err);
+      setLoading(false);
+    }
+  }, [applyData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let ignore = false;
+    fetchTrainingData()
+      .then((data) => {
+        if (!ignore) applyData(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load staff training data:", err);
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [applyData]);
 
   const certifiedCount = useMemo(() => modules.filter((m) => m.quizPassed).length, [modules]);
   const inProgressCount = useMemo(
@@ -425,12 +454,19 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
                           </svg>
                         </div>
                         <div>
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold block">
-                            Verified Accreditation
+                          <span
+                            className={`text-[10px] font-mono uppercase tracking-wider font-semibold block ${CERT_STATUS_STYLES[cert.status].className}`}
+                          >
+                            {CERT_STATUS_STYLES[cert.status].label}
                           </span>
                           <h2 className="text-base font-bold text-white mt-0.5">{cert.moduleName}</h2>
                           <p className="text-xs text-neutral-400">
                             Issued: {new Date(cert.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                          </p>
+                          <p className="text-xs text-neutral-500">
+                            {cert.expiresAt
+                              ? `${cert.status === "expired" ? "Expired" : "Valid until"}: ${new Date(cert.expiresAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`
+                              : "Does not expire"}
                           </p>
                         </div>
                       </div>
@@ -438,7 +474,7 @@ export default function StaffView({ staffName, tenantName }: StaffViewProps) {
 
                     <div className="flex items-center justify-between border-t border-neutral-800/80 pt-4">
                       <Link
-                        href={`/verify?certId=${encodeURIComponent(cert.id)}`}
+                        href={`/verify?code=${encodeURIComponent(cert.verificationCode)}`}
                         className="text-xs text-neutral-400 hover:text-white transition flex items-center gap-1"
                       >
                         <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">

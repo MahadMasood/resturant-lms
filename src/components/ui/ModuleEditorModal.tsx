@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export interface QuestionDraft {
   id?: string;
@@ -16,6 +16,37 @@ export interface ModuleDraft {
   videoUrl: string;
   tenantId?: string;
   questions?: QuestionDraft[];
+  published?: boolean;
+  validityMonths?: number | null;
+  durationSeconds?: number | null;
+}
+
+const BLANK_QUESTION: QuestionDraft = { questionText: "", options: ["", "", "", ""], correctAnswer: 0 };
+
+const VALIDITY_OPTIONS = [
+  { value: "6", label: "6 months" },
+  { value: "12", label: "12 months" },
+  { value: "24", label: "2 years" },
+  { value: "36", label: "3 years" },
+  { value: "never", label: "Never expires" },
+];
+
+/** Reads a video's length in the browser. Resolves null if it can't be read within 10s. */
+function readVideoDuration(src: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const timer = setTimeout(() => resolve(null), 10_000);
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      clearTimeout(timer);
+      resolve(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null);
+    };
+    video.onerror = () => {
+      clearTimeout(timer);
+      resolve(null);
+    };
+    video.src = src;
+  });
 }
 
 interface ModuleEditorModalProps {
@@ -37,71 +68,35 @@ export default function ModuleEditorModal({
 }: ModuleEditorModalProps) {
   const isEditing = Boolean(initialModule?.id);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(initialModule?.title ?? "");
+  const [description, setDescription] = useState(initialModule?.description ?? "");
   const [selectedTenantId, setSelectedTenantId] = useState<string>(
     initialModule?.tenantId || defaultTenantId || (tenants && tenants.length > 0 ? tenants[0].id : "ALL")
   );
   const [videoSourceType, setVideoSourceType] = useState<"file" | "url">("url");
-  const [videoUrl, setVideoUrl] = useState("/videos/module1-safety-protocols.mp4");
+  const [videoUrl, setVideoUrl] = useState(initialModule?.videoUrl ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [uploadingProgress, setUploadingProgress] = useState<number | null>(null);
 
-  const [questions, setQuestions] = useState<QuestionDraft[]>([
-    {
-      questionText: "",
-      options: ["", "", "", ""],
-      correctAnswer: 0,
-    },
-  ]);
+  const [questions, setQuestions] = useState<QuestionDraft[]>(
+    initialModule?.questions?.length
+      ? initialModule.questions.map((q) => ({
+          id: q.id,
+          questionText: q.questionText,
+          options: Array.isArray(q.options) ? [...q.options] : ["", "", "", ""],
+          correctAnswer: q.correctAnswer ?? 0,
+        }))
+      : [{ ...BLANK_QUESTION, options: [...BLANK_QUESTION.options] }]
+  );
+  const [published, setPublished] = useState(initialModule?.published ?? true);
+  const [validity, setValidity] = useState(
+    initialModule?.validityMonths === null ? "never" : String(initialModule?.validityMonths ?? 12)
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (initialModule) {
-      setTitle(initialModule.title || "");
-      setDescription(initialModule.description || "");
-      setVideoUrl(initialModule.videoUrl || "/videos/module1-safety-protocols.mp4");
-      setVideoSourceType("url");
-      if (initialModule.tenantId) {
-        setSelectedTenantId(initialModule.tenantId);
-      }
-
-      if (initialModule.questions && initialModule.questions.length > 0) {
-        setQuestions(
-          initialModule.questions.map((q) => ({
-            id: q.id,
-            questionText: q.questionText,
-            options: Array.isArray(q.options) ? [...q.options] : ["", "", "", ""],
-            correctAnswer: q.correctAnswer ?? 0,
-          }))
-        );
-      } else {
-        setQuestions([
-          {
-            questionText: "",
-            options: ["", "", "", ""],
-            correctAnswer: 0,
-          },
-        ]);
-      }
-    } else {
-      setTitle("");
-      setDescription("");
-      setVideoUrl("/videos/module1-safety-protocols.mp4");
-      setFile(null);
-      setQuestions([
-        {
-          questionText: "",
-          options: ["", "", "", ""],
-          correctAnswer: 0,
-        },
-      ]);
-    }
-    setError(null);
-  }, [initialModule, isOpen]);
 
   if (!isOpen) return null;
 
@@ -179,6 +174,7 @@ export default function ModuleEditorModal({
         body: JSON.stringify({
           filename: videoFile.name,
           contentType: videoFile.type || "video/mp4",
+          size: videoFile.size,
         }),
       });
 
@@ -212,7 +208,8 @@ export default function ModuleEditorModal({
     });
 
     if (!uploadRes.ok) {
-      throw new Error("Video file upload failed.");
+      const data = await uploadRes.json().catch(() => ({}));
+      throw new Error(data.error || "Video file upload failed.");
     }
     const uploadData = await uploadRes.json();
     setUploadingProgress(100);
@@ -263,12 +260,23 @@ export default function ModuleEditorModal({
     }
 
     setSubmitting(true);
+    let durationSeconds: number | null =
+      finalVideoUrl === initialModule?.videoUrl && !file ? (initialModule?.durationSeconds ?? null) : null;
+    if (durationSeconds === null) {
+      const objectUrl = file ? URL.createObjectURL(file) : null;
+      durationSeconds = await readVideoDuration(objectUrl ?? finalVideoUrl);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+
     try {
       const payload = {
         title: title.trim(),
         description: description.trim() || null,
         videoUrl: finalVideoUrl,
-        tenantId: selectedTenantId,
+        published,
+        validityMonths: validity === "never" ? null : Number(validity),
+        ...(durationSeconds ? { durationSeconds: Math.round(durationSeconds * 10) / 10 } : {}),
+        ...(isEditing ? {} : { tenantId: selectedTenantId }),
         questions: validQuestions.map((q) => ({
           questionText: q.questionText.trim(),
           options: q.options.map((o) => o.trim() || "Option"),
@@ -304,7 +312,7 @@ export default function ModuleEditorModal({
 
   const handleDelete = async () => {
     if (!initialModule?.id) return;
-    if (!confirm(`Are you sure you want to delete "${initialModule.title}"? This will delete all associated quiz records.`)) {
+    if (!confirm(`Remove "${initialModule.title}"? If anyone has started it, it is archived (hidden from staff, records kept); otherwise it is deleted.`)) {
       return;
     }
 
@@ -449,7 +457,7 @@ export default function ModuleEditorModal({
                     type="text"
                     value={videoUrl}
                     onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="/videos/module1-safety-protocols.mp4"
+                    placeholder="https://media.example.com/videos/training.mp4"
                     className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-indigo-500"
                   />
                   {videoUrl.includes("r2.dev") || videoUrl.includes("r2.cloudflarestorage.com") ? (
@@ -487,6 +495,42 @@ export default function ModuleEditorModal({
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="module-validity" className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+                  Certificate Valid For
+                </label>
+                <select
+                  id="module-validity"
+                  value={validity}
+                  onChange={(e) => setValidity(e.target.value)}
+                  className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white outline-none focus:border-indigo-500"
+                >
+                  {VALIDITY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-neutral-500 mt-1">Staff must retake the quiz once it expires.</p>
+              </div>
+
+              <div>
+                <span className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+                  Visibility
+                </span>
+                <label className="flex items-center gap-3 rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={published}
+                    onChange={(e) => setPublished(e.target.checked)}
+                    className="h-4 w-4 accent-indigo-500"
+                  />
+                  <span className="text-sm text-white">{published ? "Published to staff" : "Draft (hidden from staff)"}</span>
+                </label>
+              </div>
             </div>
           </div>
 

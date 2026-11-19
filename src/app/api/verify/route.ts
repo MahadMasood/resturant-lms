@@ -1,80 +1,39 @@
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { api } from "@/lib/api";
+import { findPublicCertificate } from "@/lib/certificates";
+import { enforceRateLimit } from "@/lib/rateLimit";
+import { requestIp } from "@/lib/request";
 
-// Public endpoint for health inspectors and compliance auditors to verify certificates
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "***";
-  const maskedLocal = local.length > 2 ? `${local[0]}***${local[local.length - 1]}` : `${local[0]}***`;
-  return `${maskedLocal}@${domain}`;
-}
+// GET /api/verify?code=XXXX — public certificate verification for inspectors.
+// `certId` and `id` are accepted for links printed before verification codes existed.
+export const GET = api(async (req: NextRequest) => {
+  await enforceRateLimit(`verify:ip:${requestIp(req)}`, 30, 10 * 60);
 
-export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const certId = searchParams.get("certId") || searchParams.get("id");
-  const userId = searchParams.get("userId");
-  const moduleId = searchParams.get("moduleId");
+  const query = searchParams.get("code") ?? searchParams.get("certId") ?? searchParams.get("id") ?? "";
+  const cert = await findPublicCertificate(query);
 
-  let certificate = null;
-
-  if (certId) {
-    certificate = await prisma.certificate.findFirst({
-      where: {
-        OR: [
-          { id: certId },
-          { pdfUrl: { contains: certId } },
-        ],
-      },
-      include: {
-        user: { select: { id: true, name: true, email: true, tenant: { select: { name: true } } } },
-        module: { select: { id: true, title: true, description: true } },
-      },
-    });
-  } else if (userId && moduleId) {
-    certificate = await prisma.certificate.findUnique({
-      where: { userId_moduleId: { userId, moduleId } },
-      include: {
-        user: { select: { id: true, name: true, email: true, tenant: { select: { name: true } } } },
-        module: { select: { id: true, title: true, description: true } },
-      },
-    });
-  }
-
-  if (!certificate) {
+  if (!cert) {
     return NextResponse.json(
-      { valid: false, error: "No official certificate record found matching this identifier." },
+      { valid: false, error: "No certificate matches this code." },
       { status: 404 }
     );
   }
 
-  // Also query the highest passed quiz attempt for score verification
-  const attempt = await prisma.quizAttempt.findFirst({
-    where: {
-      userId: certificate.userId,
-      moduleId: certificate.moduleId,
-      passed: true,
-    },
-    orderBy: { score: "desc" },
-    select: { score: true, createdAt: true },
-  });
-
   return NextResponse.json({
-    valid: true,
+    valid: cert.status === "valid",
     certificate: {
-      id: certificate.id,
-      issuedAt: certificate.issuedAt,
-      pdfUrl: `/certificates/${certificate.id}`,
-      recipientName: certificate.user.name,
-      recipientEmail: maskEmail(certificate.user.email),
-      venueName: certificate.user.tenant?.name || "Accredited Venue",
-      courseTitle: certificate.module.title,
-      score: attempt?.score ?? 100,
-      passingThreshold: 90,
-      antiCheatVerification: {
-        videoWatchedThresholdMet: true,
-        highWaterMarkVerified: true,
-        serverJitterTolerancePassed: true,
-      },
+      code: cert.code,
+      status: cert.status,
+      statusReason: cert.status === "revoked" ? cert.statusReason : null,
+      issuedAt: cert.issuedAt,
+      expiresAt: cert.expiresAt,
+      recipientName: cert.recipientName,
+      venueName: cert.venueName,
+      courseTitle: cert.courseTitle,
+      score: cert.score,
+      passingThreshold: cert.passingThreshold,
+      pdfUrl: cert.path,
     },
   });
-}
+});

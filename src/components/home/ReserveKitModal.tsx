@@ -44,11 +44,12 @@ export default function ReserveKitModal({ isOpen, onClose, defaultKit }: Reserve
     kitType: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (defaultKit) {
-      setSelectedKit(defaultKit);
-    }
-  }, [defaultKit]);
+  // Follow the kit chosen by whichever button opened the modal.
+  const [prevDefaultKit, setPrevDefaultKit] = useState(defaultKit);
+  if (defaultKit !== prevDefaultKit) {
+    setPrevDefaultKit(defaultKit);
+    if (defaultKit) setSelectedKit(defaultKit);
+  }
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -219,7 +220,7 @@ export default function ReserveKitModal({ isOpen, onClose, defaultKit }: Reserve
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <a
-                      href="info@pure-peaks.com"
+                      href="mailto:info@pure-peaks.com"
                       className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-neutral-300 hover:border-rose-400/50 hover:bg-rose-500/10 hover:text-white transition"
                     >
                       <svg className="h-4 w-4 text-rose-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

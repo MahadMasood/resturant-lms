@@ -1,100 +1,46 @@
-import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { z } from "zod";
+import { api, parseBody } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { ALLOWED_VIDEO_TYPES, MAX_VIDEO_BYTES, getR2Config, r2Client } from "@/lib/storage";
 
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const schema = z.object({
+  filename: z.string().trim().min(1).max(200),
+  contentType: z
+    .string()
+    .transform((v) => v.toLowerCase())
+    .refine((v) => ALLOWED_VIDEO_TYPES.includes(v), "Invalid video format. Use MP4, WebM or MOV."),
+  size: z.number().int().positive().max(MAX_VIDEO_BYTES, "File exceeds the 500MB upload limit.").optional(),
+});
 
-  // Media addition is strictly restricted to Super Admin
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json(
-      { error: "Forbidden. Media addition and video uploads are restricted to Super Admin." },
-      { status: 403 }
-    );
+// POST /api/manager/upload-url — presigned R2 upload URL (super admin only)
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
+
+  const r2 = getR2Config();
+  if (!r2) {
+    return NextResponse.json({ configured: false, message: "Cloudflare R2 storage not configured." });
   }
 
-  let r2Endpoint = process.env.R2_ENDPOINT?.trim();
-  if (r2Endpoint && !r2Endpoint.startsWith("http")) {
-    r2Endpoint = `https://${r2Endpoint}`;
-  }
-  r2Endpoint = r2Endpoint?.replace(/\/+$/, "");
+  const { filename, contentType } = await parseBody(req, schema);
 
-  const r2AccessKey = process.env.R2_ACCESS_KEY_ID?.trim();
-  const r2SecretKey = process.env.R2_SECRET_ACCESS_KEY?.trim();
-  const r2Bucket = process.env.R2_BUCKET_NAME?.trim();
+  const tenantFolder = user.tenantId || "admin";
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const key = `${tenantFolder}/videos/${Date.now()}-${sanitizedFilename}`;
 
-  // Check if Cloudflare R2 is configured
-  if (!r2Endpoint || !r2AccessKey || !r2SecretKey || !r2Bucket) {
-    return NextResponse.json(
-      { configured: false, message: "Cloudflare R2 storage not configured. Using local direct upload." },
-      { status: 200 }
-    );
-  }
+  const presignedUrl = await getSignedUrl(
+    r2Client(r2),
+    new PutObjectCommand({ Bucket: r2.bucket, Key: key, ContentType: contentType }),
+    { expiresIn: 15 * 60 }
+  );
 
-  let body: { filename?: string; contentType?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const { filename, contentType } = body;
-  if (!filename || !contentType) {
-    return NextResponse.json({ error: "filename and contentType required" }, { status: 400 });
-  }
-
-  const ALLOWED_MIME_TYPES = [
-    "video/mp4",
-    "video/webm",
-    "video/quicktime",
-    "video/x-msvideo",
-    "video/ogg",
-  ];
-  if (!ALLOWED_MIME_TYPES.includes(contentType.toLowerCase())) {
-    return NextResponse.json(
-      { error: "Invalid video format. Allowed MIME types: video/mp4, video/webm, video/quicktime" },
-      { status: 400 }
-    );
-  }
-
-  try {
-    // Cloudflare R2 requires forcePathStyle: true
-    const s3 = new S3Client({
-      region: "auto",
-      endpoint: r2Endpoint,
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: r2AccessKey,
-        secretAccessKey: r2SecretKey,
-      },
-    });
-
-    const tenantFolder = session.user.tenantId || "admin";
-    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const key = `${tenantFolder}/videos/${Date.now()}-${sanitizedFilename}`;
-
-    const command = new PutObjectCommand({
-      Bucket: r2Bucket,
-      Key: key,
-      ContentType: contentType,
-    });
-
-    const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
-    const baseUrl = (process.env.R2_PUBLIC_URL || `${r2Endpoint}/${r2Bucket}`).trim().replace(/\/+$/, "");
-    const publicUrl = `${baseUrl}/${key}`;
-
-    return NextResponse.json({
-      configured: true,
-      presignedUrl,
-      publicUrl,
-      key,
-      provider: "Cloudflare R2",
-      bucket: r2Bucket,
-    });
-  } catch (err) {
-    console.error("Cloudflare R2 Presigned URL error:", err);
-    return NextResponse.json({ error: "Failed to generate presigned upload URL" }, { status: 500 });
-  }
-}
+  return NextResponse.json({
+    configured: true,
+    presignedUrl,
+    publicUrl: `${r2.publicBaseUrl}/${key}`,
+    key,
+    provider: "Cloudflare R2",
+  });
+});

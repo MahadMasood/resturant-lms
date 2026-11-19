@@ -1,12 +1,4 @@
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../.env.local") });
-require("dotenv").config({ path: path.join(__dirname, "../.env") });
-const { Pool } = require("pg");
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+const { pool } = require("./db");
 
 async function main() {
   console.log("Seeding Salt Slab Cooking Plates, Metal Rings, and Serving Plates...");

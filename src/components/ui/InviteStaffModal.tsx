@@ -11,11 +11,24 @@ interface InviteStaffModalProps {
 export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: InviteStaffModalProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("staff123");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sign-in details shown once after the account is created.
+  const [created, setCreated] = useState<{
+    name: string;
+    email: string;
+    temporaryPassword: string;
+    welcomeEmailSent: boolean;
+  } | null>(null);
 
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setCreated(null);
+    setError(null);
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,16 +42,21 @@ export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: Invi
         body: JSON.stringify({ name, email, password }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to add staff member.");
       }
 
+      setCreated({
+        name: data.name,
+        email: data.email,
+        temporaryPassword: data.temporaryPassword,
+        welcomeEmailSent: Boolean(data.welcomeEmailSent),
+      });
       setName("");
       setEmail("");
-      setPassword("staff123");
+      setPassword("");
       onStaffAdded();
-      onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error adding staff member");
     } finally {
@@ -57,7 +75,8 @@ export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: Invi
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
+            aria-label="Close"
             className="rounded-full p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white transition"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -72,6 +91,36 @@ export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: Invi
           </div>
         )}
 
+        {created ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 leading-relaxed">
+              {created.name} has been added. Give them these sign-in details. They&apos;ll be asked to choose their own
+              password the first time they sign in. This password won&apos;t be shown again.
+              {created.welcomeEmailSent && (
+                <> We also emailed them a link to set their own password, so they can sign in without it.</>
+              )}
+            </div>
+            <dl className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 text-sm">
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Email</dt>
+                <dd className="text-white break-all">{created.email}</dd>
+              </div>
+              <div>
+                <dt className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Temporary password</dt>
+                <dd className="font-mono text-amber-300 break-all select-all">{created.temporaryPassword}</dd>
+              </div>
+            </dl>
+            <div className="flex justify-end border-t border-neutral-800 pt-4">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700 transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
@@ -102,22 +151,28 @@ export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: Invi
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
-              Initial Password
+            <label htmlFor="invite-password" className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1.5">
+              Temporary Password <span className="normal-case font-normal text-neutral-500">(optional)</span>
             </label>
             <input
+              id="invite-password"
               type="text"
-              required
+              autoComplete="off"
+              minLength={12}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave blank to generate one"
               className="w-full rounded-xl border border-neutral-700 bg-neutral-800/80 px-4 py-2.5 text-sm text-white placeholder-neutral-500 outline-none focus:border-indigo-500 font-mono"
             />
+            <p className="mt-1.5 text-[11px] text-neutral-500">
+              At least 12 characters if you set one. They must change it when they first sign in.
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 border-t border-neutral-800 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={submitting}
               className="rounded-xl border border-neutral-700 px-5 py-2.5 text-xs font-semibold text-neutral-300 hover:bg-neutral-800 transition"
             >
@@ -132,6 +187,7 @@ export default function InviteStaffModal({ isOpen, onClose, onStaffAdded }: Invi
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ declare module "next-auth" {
       role: string;
       tenantId: string | null;
       tenantName: string | null;
+      sessionVersion: number;
+      mustChangePassword: boolean;
     } & DefaultSession["user"];
   }
 
@@ -15,6 +17,8 @@ declare module "next-auth" {
     role: string;
     tenantId: string | null;
     tenantName: string | null;
+    sessionVersion: number;
+    mustChangePassword: boolean;
   }
 }
 
@@ -24,6 +28,7 @@ declare module "next-auth/jwt" {
     role: string;
     tenantId: string | null;
     tenantName: string | null;
+    sessionVersion: number;
+    mustChangePassword: boolean;
   }
 }
-

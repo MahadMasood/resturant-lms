@@ -1,20 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const DEMO_ACCOUNTS = [
-  { role: "Super Admin", email: "admin@platform.com", pass: "admin123" },
-  { role: "Manager", email: "manager@restaurant-a.com", pass: "manager123" },
-  { role: "Staff (John)", email: "john.doe@restaurant-a.com", pass: "staff123" },
-  { role: "Staff (Jane)", email: "jane.smith@restaurant-a.com", pass: "staff123" },
-];
+// Seeded development accounts (see prisma/seed.ts). Defined only in development
+// builds, so the passwords are stripped from the production bundle.
+const DEMO_ACCOUNTS =
+  process.env.NODE_ENV !== "production"
+    ? [
+        { role: "Super Admin", email: "admin@platform.com", pass: "admin123" },
+        { role: "Manager", email: "manager@restaurant-a.com", pass: "manager123" },
+        { role: "Staff (John)", email: "john.doe@restaurant-a.com", pass: "staff123" },
+        { role: "Staff (Jane)", email: "jane.smith@restaurant-a.com", pass: "staff123" },
+      ]
+    : [];
+
+const SIGN_IN_ERRORS: Record<string, string> = {
+  locked: "Too many failed attempts. Wait 15 minutes, or ask your manager to reset your password.",
+  rate_limited: "Too many sign-in attempts from this network. Please wait a few minutes.",
+};
+
+const NOTICES: Record<string, string> = {
+  session: "Your session has ended. Please sign in again.",
+  "password-changed": "Password changed. Sign in with your new password.",
+  "password-set": "Password set. Sign in with your new password.",
+};
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const notice = NOTICES[useSearchParams().get("reason") ?? ""];
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -39,7 +64,7 @@ export default function LoginPage() {
       });
 
       if (res?.error) {
-        setError("Invalid email or password. Please verify credentials.");
+        setError(SIGN_IN_ERRORS[res.code ?? ""] ?? "Invalid email or password. Please verify credentials.");
         setLoading(false);
         return;
       }
@@ -49,7 +74,9 @@ export default function LoginPage() {
       const session = await sessionRes.json();
       const role = session?.user?.role;
 
-      if (role === "SUPER_ADMIN") {
+      if (session?.user?.mustChangePassword) {
+        router.push("/change-password");
+      } else if (role === "SUPER_ADMIN") {
         router.push("/dashboard/super-admin");
       } else if (role === "MANAGER") {
         router.push("/dashboard/manager");
@@ -153,6 +180,12 @@ export default function LoginPage() {
             />
           </div>
 
+          {notice && !error && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-3 text-xs text-emerald-300">
+              {notice}
+            </div>
+          )}
+
           {error && (
             <div className="rounded-xl border border-red-500/40 bg-red-950/40 p-3 text-xs text-red-300">
               {error}
@@ -166,6 +199,12 @@ export default function LoginPage() {
           >
             {loading ? "Verifying Credentials..." : "Sign In to Portal"}
           </button>
+
+          <div className="text-center">
+            <Link href="/forgot-password" className="text-xs text-neutral-400 hover:text-white transition-colors">
+              Forgot your password?
+            </Link>
+          </div>
         </form>
 
         {/* Back to Home bottom link */}

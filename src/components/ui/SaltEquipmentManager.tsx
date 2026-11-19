@@ -82,7 +82,8 @@ export default function SaltEquipmentManager({
   }, [tenantId]);
 
   useEffect(() => {
-    loadEquipment();
+    const timer = setTimeout(loadEquipment, 0);
+    return () => clearTimeout(timer);
   }, [loadEquipment]);
 
   // Toast Auto-clear
@@ -168,13 +169,16 @@ export default function SaltEquipmentManager({
             notes: formNotes,
           }),
         });
-        if (!res.ok) throw new Error("Creation failed");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Creation failed");
+        }
         setToast({ message: `Added "${formName}" to inventory.`, type: "success" });
       }
       setIsModalOpen(false);
       loadEquipment();
-    } catch (err: any) {
-      setToast({ message: err.message || "Operation failed", type: "error" });
+    } catch (err: unknown) {
+      setToast({ message: err instanceof Error ? err.message : "Operation failed", type: "error" });
     } finally {
       setIsSubmitting(false);
     }

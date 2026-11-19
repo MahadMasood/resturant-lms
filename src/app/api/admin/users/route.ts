@@ -1,35 +1,37 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { emailSchema, idSchema, nameSchema, passwordSchema, roleSchema } from "@/lib/validation";
+import { generateTemporaryPassword, hashPassword } from "@/lib/passwords";
+import { audit } from "@/lib/audit";
+import { sendWelcomeEmail } from "@/lib/people";
+import { baseUrlFrom } from "@/lib/request";
 
-// GET /api/admin/users — Super Admin only: list all managers and staff across all venues
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+// GET /api/admin/users — managers and staff across all venues
+// ?status=active (default) | former | all
+export const GET = api(async (req: NextRequest) => {
+  await requireUser({ roles: ["SUPER_ADMIN"] });
 
   const { searchParams } = req.nextUrl;
   const tenantId = searchParams.get("tenantId");
-  const role = searchParams.get("role");
-
-  const whereClause: any = {};
-  if (tenantId && tenantId !== "ALL") {
-    whereClause.tenantId = tenantId;
-  }
-  if (role && (role === "MANAGER" || role === "STAFF" || role === "SUPER_ADMIN")) {
-    whereClause.role = role;
-  }
+  const role = roleSchema.safeParse(searchParams.get("role"));
+  const status = searchParams.get("status") ?? "active";
 
   const users = await prisma.user.findMany({
-    where: whereClause,
+    where: {
+      anonymizedAt: null,
+      ...(tenantId && tenantId !== "ALL" ? { tenantId } : {}),
+      ...(role.success ? { role: role.data } : {}),
+      ...(status === "active" ? { deactivatedAt: null } : status === "former" ? { deactivatedAt: { not: null } } : {}),
+    },
     orderBy: [{ role: "asc" }, { createdAt: "desc" }],
     include: {
       tenant: { select: { id: true, name: true } },
       _count: {
         select: {
-          certificates: true,
+          certificates: { where: { revokedAt: null } },
           quizAttempts: true,
           watchProgress: true,
         },
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(
-    users.map((u: any) => ({
+    users.map((u) => ({
       id: u.id,
       name: u.name,
       email: u.email,
@@ -46,71 +48,72 @@ export async function GET(req: NextRequest) {
       tenantId: u.tenantId,
       tenantName: u.tenant?.name || (u.role === "SUPER_ADMIN" ? "Platform Central" : "Unassigned"),
       createdAt: u.createdAt,
+      deactivatedAt: u.deactivatedAt,
+      mustChangePassword: u.mustChangePassword,
       certificatesCount: u._count.certificates,
       quizAttemptsCount: u._count.quizAttempts,
       watchCount: u._count.watchProgress,
     }))
   );
-}
+});
 
-// POST /api/admin/users — Super Admin only: provision co-managers or staff to any venue
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+const createSchema = z
+  .object({
+    name: nameSchema,
+    email: emailSchema,
+    // Optional: a random temporary password is generated when omitted.
+    password: z.union([passwordSchema, z.literal("")]).optional(),
+    role: roleSchema,
+    tenantId: idSchema.nullish(),
+  })
+  .refine((b) => b.role === "SUPER_ADMIN" || !!b.tenantId, {
+    message: "Choose a venue for managers and staff",
+    path: ["tenantId"],
+  });
 
-  let body: { name?: string; email?: string; password?: string; role?: string; tenantId?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+// POST /api/admin/users — add a super admin, manager or staff member
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
+  const body = await parseBody(req, createSchema);
 
-  const { name, email, password, role, tenantId } = body;
-  if (!name || !email || !password || !role) {
-    return NextResponse.json({ error: "Name, email, password, and role are required" }, { status: 400 });
-  }
+  const existing = await prisma.user.findUnique({ where: { email: body.email }, select: { id: true } });
+  if (existing) throw new ApiError(409, "An account with this email address already exists");
 
-  const validRoles = ["SUPER_ADMIN", "MANAGER", "STAFF"];
-  if (!validRoles.includes(role)) {
-    return NextResponse.json({ error: "Invalid role. Must be SUPER_ADMIN, MANAGER, or STAFF" }, { status: 400 });
-  }
-
-  if (role !== "SUPER_ADMIN" && !tenantId) {
-    return NextResponse.json({ error: "Restaurant venue selection is required for Manager or Staff" }, { status: 400 });
-  }
-
-  const normalizedEmail = email.toLowerCase().trim();
-  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) {
-    return NextResponse.json({ error: "An account with this email address already exists" }, { status: 409 });
-  }
-
+  const tenantId = body.role === "SUPER_ADMIN" ? null : body.tenantId!;
   if (tenantId) {
-    const tenantExists = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenantExists) {
-      return NextResponse.json({ error: "Selected restaurant venue does not exist" }, { status: 404 });
-    }
+    const venue = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { archivedAt: true } });
+    if (!venue) throw new ApiError(404, "Selected venue does not exist");
+    if (venue.archivedAt) throw new ApiError(400, "Selected venue is archived");
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const temporaryPassword = body.password || generateTemporaryPassword();
   const newUser = await prisma.user.create({
     data: {
-      name: name.trim(),
-      email: normalizedEmail,
-      passwordHash,
-      role: role as "SUPER_ADMIN" | "MANAGER" | "STAFF",
-      tenantId: role === "SUPER_ADMIN" ? null : tenantId,
+      name: body.name,
+      email: body.email,
+      passwordHash: await hashPassword(temporaryPassword),
+      mustChangePassword: true,
+      role: body.role,
+      tenantId,
     },
-    include: {
-      tenant: { select: { id: true, name: true } },
-    },
+    include: { tenant: { select: { id: true, name: true } } },
   });
+
+  await audit(user, {
+    action: "user.created",
+    targetType: "user",
+    targetId: newUser.id,
+    tenantId,
+    summary: `${user.name} added ${newUser.name} (${newUser.role.toLowerCase()}, ${newUser.email})`,
+  });
+
+  const welcomeEmailSent = await sendWelcomeEmail(newUser, baseUrlFrom(req.headers));
 
   return NextResponse.json(
     {
       success: true,
+      temporaryPassword,
+      welcomeEmailSent,
       user: {
         id: newUser.id,
         name: newUser.name,
@@ -122,4 +125,4 @@ export async function POST(req: NextRequest) {
     },
     { status: 201 }
   );
-}
+});

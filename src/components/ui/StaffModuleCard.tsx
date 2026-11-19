@@ -9,7 +9,8 @@ interface StaffModuleCardProps {
     id: string;
     title: string;
     description: string | null;
-    videoUrl: string;
+    // Null while the module is locked.
+    videoUrl: string | null;
     orderIndex?: number;
     questionCount?: number;
     watchedSeconds: number;
@@ -19,6 +20,9 @@ interface StaffModuleCardProps {
     quizScore: number | null;
     attemptsCount?: number;
     certificateUrl: string | null;
+    certificateStatus?: "valid" | "expired" | "revoked" | null;
+    certificateExpiresAt?: string | null;
+    quizEligible?: boolean;
     isLocked?: boolean;
     requiredPreviousTitle?: string | null;
   };
@@ -28,8 +32,11 @@ interface StaffModuleCardProps {
 
 export default function StaffModuleCard({ module, staffName, onRefresh }: StaffModuleCardProps) {
   const [videoCompleted, setVideoCompleted] = useState(
-    module.completed || (module.durationSeconds > 0 && module.watchedSeconds >= module.durationSeconds * 0.8)
+    module.quizEligible ??
+      (module.completed || (module.durationSeconds > 0 && module.watchedSeconds >= module.durationSeconds * 0.8))
   );
+  const certificateValid = module.certificateStatus === "valid" || (!module.certificateStatus && module.quizPassed);
+  const certificateExpired = module.certificateStatus === "expired";
 
   const handleCompletionChange = useCallback(
     (isDone: boolean) => {
@@ -142,7 +149,7 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
 
       {/* Embedded Video Player with Anti-Cheat Skip Detection */}
       <VideoPlayer
-        src={module.videoUrl || "/videos/module1-safety-protocols.mp4"}
+        src={module.videoUrl ?? ""}
         moduleId={module.id}
         title={`${module.title} · ${staffName}`}
         onCompletionChange={handleCompletionChange}
@@ -151,11 +158,24 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
       {/* Bottom Action Footer */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-neutral-800/80 pt-4">
         <div className="text-xs text-neutral-400">
-          Passing mark: <span className="font-semibold text-white">90%</span> required for accreditation certificate.
+          {certificateExpired ? (
+            <span className="text-amber-300">Your certificate has expired. Retake the quiz to renew it.</span>
+          ) : certificateValid && module.certificateExpiresAt ? (
+            <>
+              Certified · valid until{" "}
+              <span className="font-semibold text-white">
+                {new Date(module.certificateExpiresAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
+              </span>
+            </>
+          ) : (
+            <>
+              Passing mark: <span className="font-semibold text-white">90%</span> required for accreditation certificate.
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
-          {module.certificateUrl ? (
+          {module.certificateUrl && !certificateExpired ? (
             <a
               href={module.certificateUrl}
               target="_blank"
@@ -174,16 +194,12 @@ export default function StaffModuleCard({ module, staffName, onRefresh }: StaffM
             </a>
           ) : null}
 
-          {videoCompleted ? (
+          {certificateValid ? null : videoCompleted ? (
             <Link
               href={`/dashboard/staff/quiz?moduleId=${encodeURIComponent(module.id)}`}
-              className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold text-white transition shadow-lg ${
-                module.quizPassed
-                  ? "bg-neutral-800 border border-neutral-700 hover:bg-neutral-700"
-                  : "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25"
-              }`}
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-semibold text-white transition shadow-lg bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/25"
             >
-              <span>{module.quizPassed ? "Review / Retake Quiz" : "Take Evaluation Quiz"}</span>
+              <span>{certificateExpired ? "Renew Certification" : "Take Evaluation Quiz"}</span>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>

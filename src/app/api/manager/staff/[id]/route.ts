@@ -1,48 +1,19 @@
-import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { api } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { deactivateUser, requireManageableUser } from "@/lib/people";
 
-// DELETE /api/manager/staff/[id] — offboard/delete staff member and their training records
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "MANAGER" && session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
+// DELETE /api/manager/staff/[id] — offboard a staff member. The account is
+// deactivated rather than deleted, so their training records stay on file.
+export const DELETE = api(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  const user = await requireUser({ roles: ["MANAGER", "SUPER_ADMIN"] });
   const { id } = await params;
-  if (!id) return NextResponse.json({ error: "User ID required" }, { status: 400 });
+  const target = await requireManageableUser(user, id);
 
-  if (id === session.user.id) {
-    return NextResponse.json({ error: "You cannot offboard your own account" }, { status: 400 });
-  }
-
-  const target = await prisma.user.findUnique({ where: { id } });
-  if (!target) {
-    return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
-  }
-
-  if (session.user.role === "MANAGER") {
-    if (target.tenantId !== session.user.tenantId) {
-      return NextResponse.json({ error: "Cross-tenant access forbidden" }, { status: 403 });
-    }
-    if (target.role !== "STAFF") {
-      return NextResponse.json({ error: "Managers can only offboard staff members" }, { status: 403 });
-    }
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.watchProgress.deleteMany({ where: { userId: id } });
-    await tx.quizAttempt.deleteMany({ where: { userId: id } });
-    await tx.certificate.deleteMany({ where: { userId: id } });
-    await tx.user.delete({ where: { id } });
-  });
+  await deactivateUser(user, target);
 
   return NextResponse.json({
     success: true,
-    message: `Staff member "${target.name}" was offboarded successfully.`,
+    message: `${target.name} was offboarded. Their training records are kept.`,
   });
-}
+});

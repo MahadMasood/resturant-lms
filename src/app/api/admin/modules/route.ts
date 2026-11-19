@@ -1,133 +1,99 @@
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { api, ApiError, parseBody } from "@/lib/api";
+import { requireUser } from "@/lib/session";
+import { moduleCreateSchema } from "@/lib/validation";
+import { audit } from "@/lib/audit";
 
-// GET /api/admin/modules — List all modules across all venues for Super Admin
-export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Only Super Admin can access curriculum management." }, { status: 403 });
-  }
+// GET /api/admin/modules — every venue's modules, for curriculum management
+export const GET = api(async (req: NextRequest) => {
+  await requireUser({ roles: ["SUPER_ADMIN"] });
 
-  const { searchParams } = new URL(req.url);
-  const tenantId = searchParams.get("tenantId");
-
-  const whereClause: any = {};
-  if (tenantId && tenantId !== "ALL") {
-    whereClause.tenantId = tenantId;
-  }
+  const tenantId = req.nextUrl.searchParams.get("tenantId");
+  const includeArchived = req.nextUrl.searchParams.get("archived") === "include";
 
   const modules = await prisma.module.findMany({
-    where: whereClause,
+    where: {
+      ...(tenantId && tenantId !== "ALL" ? { tenantId } : {}),
+      ...(includeArchived ? {} : { archivedAt: null }),
+    },
     include: {
       tenant: { select: { id: true, name: true } },
-      questions: {
-        select: {
-          id: true,
-          questionText: true,
-          options: true,
-          correctAnswer: true,
-        },
-      },
-      _count: {
-        select: {
-          questions: true,
-          watchProgress: true,
-          certificates: true,
-        },
-      },
+      questions: { select: { id: true, questionText: true, options: true, correctAnswer: true } },
+      _count: { select: { questions: true, watchProgress: true, certificates: true } },
     },
-    orderBy: [{ tenantId: "asc" }, { orderIndex: "asc" }],
+    orderBy: [{ tenantId: "asc" }, { orderIndex: "asc" }, { createdAt: "asc" }],
   });
 
   return NextResponse.json(
-    modules.map((m: any) => ({
+    modules.map(({ _count, ...m }) => ({
       ...m,
-      questionCount: m._count.questions,
-      completionsCount: m._count.certificates,
+      published: m.publishedAt !== null,
+      questionCount: _count.questions,
+      completionsCount: _count.certificates,
     }))
   );
-}
+});
 
-// POST /api/admin/modules — Author a new module with video media and quiz questions
-export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden. Only Super Admin can create curriculum modules." }, { status: 403 });
+// POST /api/admin/modules — create a module (with quiz) for one venue or all venues
+export const POST = api(async (req: NextRequest) => {
+  const user = await requireUser({ roles: ["SUPER_ADMIN"] });
+  const body = await parseBody(req, moduleCreateSchema);
+
+  const tenants =
+    body.tenantId === "ALL"
+      ? await prisma.tenant.findMany({ where: { archivedAt: null }, select: { id: true, name: true } })
+      : await prisma.tenant.findMany({ where: { id: body.tenantId, archivedAt: null }, select: { id: true, name: true } });
+
+  if (tenants.length === 0) {
+    throw new ApiError(body.tenantId === "ALL" ? 400 : 404, body.tenantId === "ALL" ? "No venues available." : "Venue not found");
   }
 
-  const body = await req.json();
-  const { title, description, videoUrl, tenantId, questions } = body;
+  const publishedAt = body.published === false ? null : new Date();
+  const questions = body.questions ?? [];
 
-  if (!title || !videoUrl) {
-    return NextResponse.json({ error: "Title and videoUrl are required." }, { status: 400 });
-  }
-
-  if (!tenantId) {
-    return NextResponse.json({ error: "A target restaurant venue must be selected." }, { status: 400 });
-  }
-
-  // If "ALL" is selected, create for all tenants
-  if (tenantId === "ALL") {
-    const allTenants = await prisma.tenant.findMany({ select: { id: true } });
-    if (allTenants.length === 0) {
-      return NextResponse.json({ error: "No venues available." }, { status: 400 });
-    }
-
-    const createdModules = await prisma.$transaction(
-      allTenants.map((t: any) =>
-        prisma.module.create({
+  const created = await prisma.$transaction(async (tx) => {
+    const results = [];
+    for (const t of tenants) {
+      // Each venue gets the new module at the end of its own sequence.
+      const last = await tx.module.findFirst({
+        where: { tenantId: t.id },
+        orderBy: { orderIndex: "desc" },
+        select: { orderIndex: true },
+      });
+      results.push(
+        await tx.module.create({
           data: {
             tenantId: t.id,
-            title: title.trim(),
-            description: description?.trim() || null,
-            videoUrl: videoUrl.trim(),
-            orderIndex: 0,
-            questions: questions && questions.length > 0
-              ? {
-                  create: questions.map((q: any) => ({
-                    questionText: q.questionText.trim(),
-                    options: q.options.map((o: string) => o.trim() || "Option"),
-                    correctAnswer: q.correctAnswer ?? 0,
-                  })),
-                }
-              : undefined,
+            title: body.title,
+            description: body.description || null,
+            videoUrl: body.videoUrl,
+            durationSeconds: body.durationSeconds ?? null,
+            validityMonths: body.validityMonths === undefined ? 12 : body.validityMonths,
+            publishedAt,
+            orderIndex: (last?.orderIndex ?? 0) + 1,
+            questions: questions.length ? { create: questions } : undefined,
           },
-          include: { questions: true },
+          include: { questions: true, tenant: { select: { id: true, name: true } } },
         })
-      )
-    );
+      );
+    }
+    return results;
+  });
 
-    return NextResponse.json({ success: true, count: createdModules.length }, { status: 201 });
+  await audit(user, {
+    action: "module.created",
+    targetType: "module",
+    targetId: created.length === 1 ? created[0].id : null,
+    tenantId: created.length === 1 ? created[0].tenantId : null,
+    summary:
+      created.length === 1
+        ? `${user.name} created "${body.title}" for ${tenants[0].name}`
+        : `${user.name} created "${body.title}" for ${created.length} venues`,
+  });
+
+  if (body.tenantId === "ALL") {
+    return NextResponse.json({ success: true, count: created.length }, { status: 201 });
   }
-
-  // Single tenant module creation
-  const lastModule = await prisma.module.findFirst({
-    where: { tenantId },
-    orderBy: { orderIndex: "desc" },
-  });
-
-  const newModule = await prisma.module.create({
-    data: {
-      tenantId,
-      title: title.trim(),
-      description: description?.trim() || null,
-      videoUrl: videoUrl.trim(),
-      orderIndex: (lastModule?.orderIndex ?? 0) + 1,
-      questions: questions && questions.length > 0
-        ? {
-            create: questions.map((q: any) => ({
-              questionText: q.questionText.trim(),
-              options: q.options.map((o: string) => o.trim() || "Option"),
-              correctAnswer: q.correctAnswer ?? 0,
-            })),
-          }
-        : undefined,
-    },
-    include: { questions: true, tenant: { select: { id: true, name: true } } },
-  });
-
-  return NextResponse.json(newModule, { status: 201 });
-}
+  return NextResponse.json(created[0], { status: 201 });
+});
